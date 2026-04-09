@@ -5,8 +5,9 @@
 
 use crate::AnchorContext;
 use litesvm_utils::LiteSVMBuilder;
+use solana_keypair::Keypair;
 use solana_program::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, Signer};
+use solana_signer::Signer;
 
 /// Builder for creating an AnchorContext with programs pre-deployed
 ///
@@ -98,7 +99,8 @@ impl AnchorLiteSVM {
     /// let mut ctx = builder.build();
     /// ```
     pub fn build(self) -> AnchorContext {
-        let program_id = self.primary_program_id
+        let program_id = self
+            .primary_program_id
             .expect("No programs added. Call deploy_program() at least once.");
 
         let mut svm = self.svm_builder.build();
@@ -200,7 +202,8 @@ pub trait ProgramTestExt {
 
 impl ProgramTestExt for AnchorContext {
     fn deploy_program(&mut self, program_id: Pubkey, program_bytes: &[u8]) {
-        self.svm.add_program(program_id, program_bytes)
+        self.svm
+            .add_program(program_id, program_bytes)
             .expect("Failed to deploy program");
     }
 }

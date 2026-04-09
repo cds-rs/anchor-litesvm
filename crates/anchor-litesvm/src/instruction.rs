@@ -68,7 +68,7 @@ mod tests {
 
     #[test]
     fn test_instruction_building() {
-        // In anchor 1.0.0-rc.2, AnchorSerialize is an alias for BorshSerialize
+        // In anchor 1.0.0, AnchorSerialize is an alias for BorshSerialize
         #[derive(BorshSerialize)]
         struct TestArgs {
             value: u64,
@@ -81,12 +81,8 @@ mod tests {
         ];
         let args = TestArgs { value: 42 };
 
-        let instruction = build_anchor_instruction(
-            &program_id,
-            "test",
-            accounts.clone(),
-            args,
-        ).unwrap();
+        let instruction =
+            build_anchor_instruction(&program_id, "test", accounts.clone(), args).unwrap();
 
         assert_eq!(instruction.program_id, program_id);
         assert_eq!(instruction.accounts.len(), 2);

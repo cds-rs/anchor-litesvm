@@ -169,5 +169,6 @@ pub use transaction::{TransactionError, TransactionHelpers, TransactionResult};
 
 // Re-export commonly used external types
 pub use litesvm::LiteSVM;
+pub use solana_keypair::Keypair;
 pub use solana_program::pubkey::Pubkey;
-pub use solana_sdk::signature::Keypair;
+pub use solana_signer::Signer;

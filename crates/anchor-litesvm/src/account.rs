@@ -21,10 +21,7 @@ pub enum AccountError {
 /// 1. Retrieves the account data from LiteSVM
 /// 2. Deserializes it using Anchor's AccountDeserialize trait
 /// 3. Handles the 8-byte discriminator that Anchor prepends to account data
-pub fn get_anchor_account<T>(
-    svm: &LiteSVM,
-    address: &Pubkey,
-) -> Result<T, AccountError>
+pub fn get_anchor_account<T>(svm: &LiteSVM, address: &Pubkey) -> Result<T, AccountError>
 where
     T: AccountDeserialize,
 {
@@ -47,10 +44,7 @@ where
 ///
 /// Note: `try_deserialize_unchecked` already handles skipping the discriminator
 /// internally, so we pass the full account data to it.
-pub fn get_anchor_account_unchecked<T>(
-    svm: &LiteSVM,
-    address: &Pubkey,
-) -> Result<T, AccountError>
+pub fn get_anchor_account_unchecked<T>(svm: &LiteSVM, address: &Pubkey) -> Result<T, AccountError>
 where
     T: AccountDeserialize,
 {
@@ -139,7 +133,7 @@ mod tests {
         // Create account in LiteSVM
         svm.set_account(
             addr,
-            solana_sdk::account::Account {
+            solana_account::Account {
                 lamports: 1_000_000,
                 data,
                 owner: Pubkey::new_unique(),
@@ -175,7 +169,7 @@ mod tests {
         // Create account in LiteSVM
         svm.set_account(
             addr,
-            solana_sdk::account::Account {
+            solana_account::Account {
                 lamports: 1_000_000,
                 data,
                 owner: Pubkey::new_unique(),
@@ -211,7 +205,7 @@ mod tests {
         // Create account in LiteSVM
         svm.set_account(
             addr,
-            solana_sdk::account::Account {
+            solana_account::Account {
                 lamports: 1_000_000,
                 data,
                 owner: Pubkey::new_unique(),
@@ -224,7 +218,10 @@ mod tests {
         // Test get_anchor_account should FAIL with wrong discriminator
         let result: Result<TestAccount, AccountError> = get_anchor_account(&svm, &addr);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), AccountError::DeserializationError(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            AccountError::DeserializationError(_)
+        ));
     }
 
     #[test]
@@ -235,7 +232,10 @@ mod tests {
         // Try to get non-existent account
         let result: Result<TestAccount, AccountError> = get_anchor_account(&svm, &addr);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), AccountError::AccountNotFound(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            AccountError::AccountNotFound(_)
+        ));
     }
 
     #[test]
@@ -258,7 +258,7 @@ mod tests {
         // Create account in LiteSVM
         svm.set_account(
             addr,
-            solana_sdk::account::Account {
+            solana_account::Account {
                 lamports: 1_000_000,
                 data,
                 owner: Pubkey::new_unique(),

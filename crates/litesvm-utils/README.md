@@ -22,14 +22,14 @@
 
 ```toml
 [dev-dependencies]
-litesvm-utils = "0.3"
+litesvm-utils = "0.4"
 ```
 
 ## Quick Start
 
 ```rust
 use litesvm_utils::{LiteSVMBuilder, TestHelpers, AssertionHelpers, TransactionHelpers};
-use solana_sdk::signature::Signer;
+use solana_signer::Signer;
 
 #[test]
 fn test_my_program() {

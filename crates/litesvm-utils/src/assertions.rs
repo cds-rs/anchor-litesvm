@@ -4,8 +4,8 @@
 //! account states in tests.
 
 use litesvm::LiteSVM;
-use solana_program::pubkey::Pubkey;
 use litesvm_token::spl_token;
+use solana_program::pubkey::Pubkey;
 use solana_program_pack::Pack;
 
 /// Assertion helper methods for LiteSVM
@@ -107,7 +107,9 @@ impl AssertionHelpers for LiteSVM {
     fn assert_account_closed(&self, pubkey: &Pubkey) {
         let account = self.get_account(pubkey);
         assert!(
-            account.is_none() || (account.as_ref().unwrap().lamports == 0 && account.as_ref().unwrap().data.is_empty()),
+            account.is_none()
+                || (account.as_ref().unwrap().lamports == 0
+                    && account.as_ref().unwrap().data.is_empty()),
             "Expected account {} to be closed, but it exists with {} lamports and {} bytes of data",
             pubkey,
             account.as_ref().map_or(0, |a| a.lamports),
@@ -196,7 +198,7 @@ impl AssertionHelpers for LiteSVM {
 mod tests {
     use super::*;
     use crate::test_helpers::TestHelpers;
-    use solana_sdk::signature::Signer;
+    use solana_signer::Signer;
 
     #[test]
     fn test_assert_account_closed_nonexistent() {

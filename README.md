@@ -93,7 +93,7 @@ fn test_my_program() {
 
 ```toml
 [dev-dependencies]
-litesvm-utils = "0.3"
+litesvm-utils = "0.4"
 ```
 
 ```rust

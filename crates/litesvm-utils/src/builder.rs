@@ -73,7 +73,8 @@ impl LiteSVMBuilder {
     pub fn build(mut self) -> LiteSVM {
         // Deploy all programs
         for (program_id, program_bytes) in self.programs {
-            self.svm.add_program(program_id, &program_bytes)
+            self.svm
+                .add_program(program_id, &program_bytes)
                 .expect("Failed to add program");
         }
 

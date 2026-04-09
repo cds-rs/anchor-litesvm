@@ -28,7 +28,7 @@ anchor-litesvm = "0.3"
 ```rust
 use anchor_litesvm::AnchorLiteSVM;
 use litesvm_utils::{AssertionHelpers, TestHelpers};
-use solana_sdk::signature::Signer;
+use solana_signer::Signer;
 
 // Generate client types from your program
 anchor_lang::declare_program!(my_program);
@@ -50,7 +50,7 @@ fn test_my_anchor_program() {
         .accounts(my_program::client::accounts::Initialize {
             user: user.pubkey(),
             mint: mint.pubkey(),
-            system_program: solana_sdk::system_program::id(),
+            system_program: solana_system_interface::program::id(),
         })
         .args(my_program::client::args::Initialize { amount: 1_000_000 })
         .instruction()

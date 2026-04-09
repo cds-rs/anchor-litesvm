@@ -2,10 +2,9 @@
 ///
 /// This example demonstrates the 78% code reduction achieved with anchor-litesvm
 /// compared to raw LiteSVM, while maintaining the exact same syntax as anchor-client.
-
 use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, TestHelpers};
-use solana_sdk::signature::Signer;
 use solana_program::pubkey::Pubkey;
+use solana_signer::Signer;
 
 // Example: Generate client types from your program (normally done with anchor_lang::declare_program!)
 mod my_program {
@@ -170,11 +169,17 @@ fn example_complete_test() {
 
     // Token operations in one line
     let mint = ctx.svm.create_token_mint(&maker, 9).unwrap();
-    let maker_ata = ctx.svm.create_associated_token_account(&mint.pubkey(), &maker).unwrap();
-    ctx.svm.mint_to(&mint.pubkey(), &maker_ata, &maker, 1_000_000_000).unwrap();
+    let maker_ata = ctx
+        .svm
+        .create_associated_token_account(&mint.pubkey(), &maker)
+        .unwrap();
+    ctx.svm
+        .mint_to(&mint.pubkey(), &maker_ata, &maker, 1_000_000_000)
+        .unwrap();
 
     // Build instruction with simplified testing syntax
-    let ix = ctx.program()
+    let ix = ctx
+        .program()
         .accounts(my_program::client::accounts::Transfer {
             from: maker_ata,
             to: taker.pubkey(),

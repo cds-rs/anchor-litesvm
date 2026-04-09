@@ -9,10 +9,9 @@
 ///
 /// Note: These examples demonstrate the actual working API.
 /// For runnable tests, you would need compiled Anchor program bytes.
-
 use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, TestHelpers};
-use solana_sdk::signature::Signer;
 use solana_program::pubkey::Pubkey;
+use solana_signer::Signer;
 
 fn main() {
     println!("=== Advanced Features of anchor-litesvm ===\n");
@@ -53,15 +52,27 @@ fn example_token_operations() {
     let mint = ctx.svm.create_token_mint(&alice, 9).unwrap();
 
     // Create associated token accounts for each participant
-    let alice_ata = ctx.svm.create_associated_token_account(&mint.pubkey(), &alice).unwrap();
-    let bob_ata = ctx.svm.create_associated_token_account(&mint.pubkey(), &bob).unwrap();
-    let charlie_ata = ctx.svm.create_associated_token_account(&mint.pubkey(), &charlie).unwrap();
+    let alice_ata = ctx
+        .svm
+        .create_associated_token_account(&mint.pubkey(), &alice)
+        .unwrap();
+    let bob_ata = ctx
+        .svm
+        .create_associated_token_account(&mint.pubkey(), &bob)
+        .unwrap();
+    let charlie_ata = ctx
+        .svm
+        .create_associated_token_account(&mint.pubkey(), &charlie)
+        .unwrap();
 
     // Mint tokens to Alice's account
-    ctx.svm.mint_to(&mint.pubkey(), &alice_ata, &alice, 1_000_000_000_000u64).unwrap();
+    ctx.svm
+        .mint_to(&mint.pubkey(), &alice_ata, &alice, 1_000_000_000_000u64)
+        .unwrap();
 
     // Verify initial balance using AssertionHelpers trait
-    ctx.svm.assert_token_balance(&alice_ata, 1_000_000_000_000u64);
+    ctx.svm
+        .assert_token_balance(&alice_ata, 1_000_000_000_000u64);
     ctx.svm.assert_token_balance(&bob_ata, 0);
     ctx.svm.assert_token_balance(&charlie_ata, 0);
 
@@ -88,18 +99,16 @@ fn example_pda_operations() {
     let seed = 42u64;
 
     // Method 1: Get just the PDA
-    let pda = ctx.svm.get_pda(&[
-        b"user_vault",
-        user.pubkey().as_ref(),
-        &seed.to_le_bytes()
-    ], &program_id);
+    let pda = ctx.svm.get_pda(
+        &[b"user_vault", user.pubkey().as_ref(), &seed.to_le_bytes()],
+        &program_id,
+    );
 
     // Method 2: Get PDA and bump
-    let (pda_with_bump, bump) = ctx.svm.get_pda_with_bump(&[
-        b"user_vault",
-        user.pubkey().as_ref(),
-        &seed.to_le_bytes()
-    ], &program_id);
+    let (pda_with_bump, bump) = ctx.svm.get_pda_with_bump(
+        &[b"user_vault", user.pubkey().as_ref(), &seed.to_le_bytes()],
+        &program_id,
+    );
 
     assert_eq!(pda, pda_with_bump);
 
@@ -148,14 +157,23 @@ fn example_batch_operations() {
     // Create token accounts for each user for the first mint
     let first_mint = &mints[0];
     for (i, account) in accounts[1..6].iter().enumerate() {
-        let ata = ctx.svm.create_associated_token_account(&first_mint.pubkey(), account).unwrap();
+        let ata = ctx
+            .svm
+            .create_associated_token_account(&first_mint.pubkey(), account)
+            .unwrap();
 
         // Mint initial tokens
-        ctx.svm.mint_to(&first_mint.pubkey(), &ata, mint_authority, 100_000_000).unwrap();
+        ctx.svm
+            .mint_to(&first_mint.pubkey(), &ata, mint_authority, 100_000_000)
+            .unwrap();
 
         // Verify creation using AssertionHelpers trait
         ctx.svm.assert_token_balance(&ata, 100_000_000);
-        println!("  Created and funded token account {} for user {}", i + 1, i + 2);
+        println!(
+            "  Created and funded token account {} for user {}",
+            i + 1,
+            i + 2
+        );
     }
 
     // Verify SOL balances
@@ -178,10 +196,15 @@ fn example_advanced_assertions() {
 
     let user = ctx.svm.create_funded_account(10_000_000_000).unwrap();
     let mint = ctx.svm.create_token_mint(&user, 9).unwrap();
-    let token_account = ctx.svm.create_associated_token_account(&mint.pubkey(), &user).unwrap();
+    let token_account = ctx
+        .svm
+        .create_associated_token_account(&mint.pubkey(), &user)
+        .unwrap();
 
     // Mint some tokens
-    ctx.svm.mint_to(&mint.pubkey(), &token_account, &user, 1_000_000_000).unwrap();
+    ctx.svm
+        .mint_to(&mint.pubkey(), &token_account, &user, 1_000_000_000)
+        .unwrap();
 
     println!("=== Demonstrating Assertion Methods ===");
 
@@ -201,7 +224,8 @@ fn example_advanced_assertions() {
     println!("✓ Mint supply check passed");
 
     // Account owner assertion
-    ctx.svm.assert_account_owner(&token_account, &spl_token::id());
+    ctx.svm
+        .assert_account_owner(&token_account, &spl_token::id());
     println!("✓ Account owner check passed");
 
     // Account data length assertion
@@ -284,8 +308,14 @@ fn example_error_recovery() {
     let poor_user = ctx.svm.create_funded_account(100).unwrap(); // Very low balance
 
     println!("=== Error Handling Example ===");
-    println!("Rich user balance: {} lamports", ctx.svm.get_balance(&rich_user.pubkey()).unwrap());
-    println!("Poor user balance: {} lamports", ctx.svm.get_balance(&poor_user.pubkey()).unwrap());
+    println!(
+        "Rich user balance: {} lamports",
+        ctx.svm.get_balance(&rich_user.pubkey()).unwrap()
+    );
+    println!(
+        "Poor user balance: {} lamports",
+        ctx.svm.get_balance(&poor_user.pubkey()).unwrap()
+    );
 
     // In a real scenario with an actual expensive instruction:
     // let result = ctx.execute_instruction(expensive_ix, &[&poor_user]);
@@ -329,7 +359,10 @@ fn example_complete_workflow() {
     let mut ctx = AnchorLiteSVM::build_with_program(program_id, &program_bytes);
     let user = ctx.svm.create_funded_account(10_000_000_000).unwrap();
     let mint = ctx.svm.create_token_mint(&user, 9).unwrap();
-    let token_account = ctx.svm.create_associated_token_account(&mint.pubkey(), &user).unwrap();
+    let token_account = ctx
+        .svm
+        .create_associated_token_account(&mint.pubkey(), &user)
+        .unwrap();
     println!("   ✓ Created user, mint, and token account\n");
 
     // 2. Build instruction using simplified syntax

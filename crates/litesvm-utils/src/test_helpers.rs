@@ -4,9 +4,10 @@
 //! token mints, and associated token accounts.
 
 use litesvm::LiteSVM;
+use solana_keypair::Keypair;
 use solana_program::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, Signer};
-use solana_sdk::transaction::Transaction;
+use solana_signer::Signer;
+use solana_transaction::Transaction;
 use spl_associated_token_account::get_associated_token_address;
 use std::error::Error;
 
@@ -45,7 +46,7 @@ pub trait TestHelpers {
     /// ```no_run
     /// # use litesvm_utils::TestHelpers;
     /// # use litesvm::LiteSVM;
-    /// # use solana_sdk::signature::Keypair;
+    /// # use solana_keypair::Keypair;
     /// # let mut svm = LiteSVM::new();
     /// # let authority = Keypair::new();
     /// let mint = svm.create_token_mint(&authority, 9).unwrap();
@@ -62,7 +63,8 @@ pub trait TestHelpers {
     /// ```no_run
     /// # use litesvm_utils::TestHelpers;
     /// # use litesvm::LiteSVM;
-    /// # use solana_sdk::signature::{Keypair, Signer};
+    /// # use solana_keypair::Keypair;
+    /// # use solana_signer::Signer;
     /// # let mut svm = LiteSVM::new();
     /// # let owner = Keypair::new();
     /// # let mint = Keypair::new();
@@ -80,7 +82,8 @@ pub trait TestHelpers {
     /// ```no_run
     /// # use litesvm_utils::TestHelpers;
     /// # use litesvm::LiteSVM;
-    /// # use solana_sdk::signature::{Keypair, Signer};
+    /// # use solana_keypair::Keypair;
+    /// # use solana_signer::Signer;
     /// # let mut svm = LiteSVM::new();
     /// # let owner = Keypair::new();
     /// # let mint = Keypair::new();
@@ -98,7 +101,8 @@ pub trait TestHelpers {
     /// ```no_run
     /// # use litesvm_utils::TestHelpers;
     /// # use litesvm::LiteSVM;
-    /// # use solana_sdk::signature::{Keypair, Signer};
+    /// # use solana_keypair::Keypair;
+    /// # use solana_signer::Signer;
     /// # use solana_program::pubkey::Pubkey;
     /// # let mut svm = LiteSVM::new();
     /// # let mint = Keypair::new();
@@ -137,7 +141,8 @@ pub trait TestHelpers {
     /// # use litesvm_utils::TestHelpers;
     /// # use litesvm::LiteSVM;
     /// # use solana_program::pubkey::Pubkey;
-    /// # use solana_sdk::signature::{Keypair, Signer};
+    /// # use solana_keypair::Keypair;
+    /// # use solana_signer::Signer;
     /// # let svm = LiteSVM::new();
     /// # let program_id = Pubkey::new_unique();
     /// # let maker = Keypair::new();
@@ -284,12 +289,13 @@ impl TestHelpers for LiteSVM {
         let ata = get_associated_token_address(&owner.pubkey(), mint);
 
         // Create ATA instruction
-        let create_ata_ix = spl_associated_token_account::instruction::create_associated_token_account(
-            &owner.pubkey(),
-            &owner.pubkey(),
-            mint,
-            &spl_token::id(),
-        );
+        let create_ata_ix =
+            spl_associated_token_account::instruction::create_associated_token_account(
+                &owner.pubkey(),
+                &owner.pubkey(),
+                mint,
+                &spl_token::id(),
+            );
 
         // Send transaction
         let tx = Transaction::new_signed_with_payer(
@@ -355,7 +361,7 @@ impl TestHelpers for LiteSVM {
 mod tests {
     use super::*;
     use solana_program_pack::Pack;
-    use solana_sdk::signature::Signer;
+    use solana_signer::Signer;
 
     #[test]
     fn test_create_funded_account() {

@@ -2,12 +2,13 @@ use crate::account::AccountError;
 use crate::program::Program;
 use anchor_lang::AccountDeserialize;
 use litesvm::LiteSVM;
-use solana_program::pubkey::Pubkey;
-use solana_sdk::{
-    signature::{Keypair, Signature, Signer},
-    transaction::Transaction,
-};
 use litesvm_utils::TransactionResult;
+use solana_hash::Hash;
+use solana_keypair::Keypair;
+use solana_program::pubkey::Pubkey;
+use solana_signature::Signature;
+use solana_signer::Signer;
+use solana_transaction::Transaction;
 
 /// Production-compatible testing context for Anchor programs.
 ///
@@ -56,11 +57,7 @@ impl AnchorContext {
     }
 
     /// Create a new AnchorContext with a specific payer
-    pub(crate) fn new_with_payer(
-        svm: LiteSVM,
-        program_id: Pubkey,
-        payer: Keypair,
-    ) -> Self {
+    pub(crate) fn new_with_payer(svm: LiteSVM, program_id: Pubkey, payer: Keypair) -> Self {
         let program = Program::new(program_id);
 
         Self {
@@ -214,7 +211,8 @@ impl AnchorContext {
     where
         T: AccountDeserialize,
     {
-        let account_data = self.svm
+        let account_data = self
+            .svm
             .get_account(address)
             .ok_or(AccountError::AccountNotFound(*address))?;
 
@@ -233,7 +231,8 @@ impl AnchorContext {
     where
         T: AccountDeserialize,
     {
-        let account_data = self.svm
+        let account_data = self
+            .svm
             .get_account(address)
             .ok_or(AccountError::AccountNotFound(*address))?;
 
@@ -245,22 +244,31 @@ impl AnchorContext {
     }
 
     /// Create a funded account (convenience method)
-    pub fn create_funded_account(&mut self, lamports: u64) -> Result<Keypair, Box<dyn std::error::Error>> {
+    pub fn create_funded_account(
+        &mut self,
+        lamports: u64,
+    ) -> Result<Keypair, Box<dyn std::error::Error>> {
         let account = Keypair::new();
-        self.svm.airdrop(&account.pubkey(), lamports)
+        self.svm
+            .airdrop(&account.pubkey(), lamports)
             .map_err(|e| format!("Airdrop failed: {:?}", e))?;
         Ok(account)
     }
 
     /// Airdrop lamports to an account (convenience method)
-    pub fn airdrop(&mut self, pubkey: &Pubkey, lamports: u64) -> Result<(), Box<dyn std::error::Error>> {
-        self.svm.airdrop(pubkey, lamports)
+    pub fn airdrop(
+        &mut self,
+        pubkey: &Pubkey,
+        lamports: u64,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.svm
+            .airdrop(pubkey, lamports)
             .map_err(|e| format!("Airdrop failed: {:?}", e))?;
         Ok(())
     }
 
     /// Get the latest blockhash
-    pub fn latest_blockhash(&self) -> solana_sdk::hash::Hash {
+    pub fn latest_blockhash(&self) -> Hash {
         self.svm.latest_blockhash()
     }
 

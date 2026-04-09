@@ -5,9 +5,10 @@
 
 use litesvm::types::TransactionMetadata;
 use litesvm::LiteSVM;
+use solana_keypair::Keypair;
 use solana_program::instruction::Instruction;
-use solana_sdk::signature::{Keypair, Signer};
-use solana_sdk::transaction::Transaction;
+use solana_signer::Signer;
+use solana_transaction::Transaction;
 use std::fmt;
 use thiserror::Error;
 
@@ -64,7 +65,11 @@ impl TransactionResult {
     /// * `error` - The error message
     /// * `result` - The transaction metadata from LiteSVM
     /// * `instruction_name` - Optional name of the instruction for debugging
-    pub fn new_failed(error: String, result: TransactionMetadata, instruction_name: Option<String>) -> Self {
+    pub fn new_failed(
+        error: String,
+        result: TransactionMetadata,
+        instruction_name: Option<String>,
+    ) -> Self {
         Self {
             inner: result,
             instruction_name,
@@ -297,7 +302,8 @@ impl TransactionResult {
         let found_in_logs = self.logs().iter().any(|log| log.contains(error_name));
 
         // Also check the error message
-        let found_in_error = self.error
+        let found_in_error = self
+            .error
             .as_ref()
             .map(|e| e.contains(error_name))
             .unwrap_or(false);
@@ -365,7 +371,7 @@ pub trait TransactionHelpers {
     /// # use litesvm_utils::TransactionHelpers;
     /// # use litesvm::LiteSVM;
     /// # use solana_program::instruction::Instruction;
-    /// # use solana_sdk::signature::Keypair;
+    /// # use solana_keypair::Keypair;
     /// # let mut svm = LiteSVM::new();
     /// # let ix = Instruction::new_with_bytes(solana_program::pubkey::Pubkey::new_unique(), &[], vec![]);
     /// # let signer = Keypair::new();
@@ -385,7 +391,7 @@ pub trait TransactionHelpers {
     /// # use litesvm_utils::TransactionHelpers;
     /// # use litesvm::LiteSVM;
     /// # use solana_program::instruction::Instruction;
-    /// # use solana_sdk::signature::Keypair;
+    /// # use solana_keypair::Keypair;
     /// # let mut svm = LiteSVM::new();
     /// # let ix1 = Instruction::new_with_bytes(solana_program::pubkey::Pubkey::new_unique(), &[], vec![]);
     /// # let ix2 = Instruction::new_with_bytes(solana_program::pubkey::Pubkey::new_unique(), &[], vec![]);
@@ -405,9 +411,10 @@ pub trait TransactionHelpers {
     /// ```no_run
     /// # use litesvm_utils::TransactionHelpers;
     /// # use litesvm::LiteSVM;
-    /// # use solana_sdk::transaction::Transaction;
     /// # use solana_program::instruction::Instruction;
-    /// # use solana_sdk::signature::{Keypair, Signer};
+    /// # use solana_keypair::Keypair;
+    /// # use solana_signer::Signer;
+    /// # use solana_transaction::Transaction;
     /// # let mut svm = LiteSVM::new();
     /// # let ix = Instruction::new_with_bytes(solana_program::pubkey::Pubkey::new_unique(), &[], vec![]);
     /// # let signer = Keypair::new();
@@ -433,7 +440,9 @@ impl TransactionHelpers for LiteSVM {
         signers: &[&Keypair],
     ) -> Result<TransactionResult, TransactionError> {
         if signers.is_empty() {
-            return Err(TransactionError::BuildError("No signers provided".to_string()));
+            return Err(TransactionError::BuildError(
+                "No signers provided".to_string(),
+            ));
         }
 
         let tx = Transaction::new_signed_with_payer(
@@ -452,7 +461,9 @@ impl TransactionHelpers for LiteSVM {
         signers: &[&Keypair],
     ) -> Result<TransactionResult, TransactionError> {
         if signers.is_empty() {
-            return Err(TransactionError::BuildError("No signers provided".to_string()));
+            return Err(TransactionError::BuildError(
+                "No signers provided".to_string(),
+            ));
         }
 
         let tx = Transaction::new_signed_with_payer(

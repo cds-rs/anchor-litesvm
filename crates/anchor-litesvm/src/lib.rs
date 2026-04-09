@@ -27,8 +27,7 @@
 //! ## Quick Start
 //!
 //! ```rust,ignore
-//! use anchor_litesvm::{AnchorLiteSVM, TestHelpers, AssertionHelpers};
-//! use solana_sdk::signature::Signer;
+//! use anchor_litesvm::{AnchorLiteSVM, TestHelpers, AssertionHelpers, Signer};
 //!
 //! // 1. Generate client types from your program
 //! anchor_lang::declare_program!(my_program);
@@ -149,9 +148,10 @@ pub use litesvm_utils::{
 // Re-export commonly used external types
 pub use anchor_lang::{AccountDeserialize, AnchorSerialize};
 pub use litesvm::LiteSVM;
+pub use solana_keypair::Keypair;
 pub use solana_program::instruction::{AccountMeta, Instruction};
 pub use solana_program::pubkey::Pubkey;
-pub use solana_sdk::signature::{Keypair, Signer};
+pub use solana_signer::Signer;
 
 #[cfg(test)]
 mod integration_tests {
@@ -166,7 +166,7 @@ mod integration_tests {
         let _ctx = AnchorContext::new(svm, program_id);
 
         // Test instruction building
-        // In anchor 1.0.0-rc.2, AnchorSerialize is an alias for BorshSerialize
+        // In anchor 1.0.0, AnchorSerialize is an alias for BorshSerialize
         #[derive(BorshSerialize)]
         struct TestArgs {
             value: u64,
@@ -177,13 +177,9 @@ mod integration_tests {
             AccountMeta::new_readonly(Pubkey::new_unique(), false),
         ];
 
-        let instruction = build_anchor_instruction(
-            &program_id,
-            "test",
-            accounts,
-            TestArgs { value: 42 },
-        )
-        .unwrap();
+        let instruction =
+            build_anchor_instruction(&program_id, "test", accounts, TestArgs { value: 42 })
+                .unwrap();
 
         assert_eq!(instruction.program_id, program_id);
         assert!(!instruction.data.is_empty());

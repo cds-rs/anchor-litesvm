@@ -4,10 +4,7 @@
 //! RPC-layer abstractions like `.request()` and `.remove(0)`.
 
 use anchor_lang::{InstructionData, ToAccountMetas};
-use solana_program::{
-    instruction::Instruction,
-    pubkey::Pubkey,
-};
+use solana_program::{instruction::Instruction, pubkey::Pubkey};
 
 /// A lightweight Program wrapper for building instructions in tests.
 ///
@@ -107,8 +104,8 @@ impl InstructionBuilder {
 mod tests {
     use super::Program;
     use anchor_lang::{prelude::*, InstructionData, ToAccountMetas};
-    use solana_program::pubkey::Pubkey;
     use solana_program::instruction::AccountMeta;
+    use solana_program::pubkey::Pubkey;
 
     struct TestAccounts {
         user: Pubkey,

@@ -1,6 +1,6 @@
 [package]
 name = "litesvm-utils"
-version = "0.3.0"
+version = "0.4.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -12,9 +12,11 @@ keywords = ["solana", "litesvm", "testing", "blockchain", "utilities"]
 [dependencies]
 litesvm = { workspace = true }
 litesvm-token = { workspace = true }
-solana-sdk = { workspace = true }
 solana-program = { workspace = true }
 solana-program-pack = { workspace = true }
+solana-keypair = { workspace = true }
+solana-signer = { workspace = true }
+solana-transaction = { workspace = true }
 spl-token = { workspace = true }
 spl-associated-token-account = { workspace = true }
 solana-system-interface = { workspace = true }
