@@ -20,7 +20,7 @@
 
 ```toml
 [dev-dependencies]
-anchor-litesvm = "0.3"
+anchor-litesvm = "0.4"
 ```
 
 ## Quick Start

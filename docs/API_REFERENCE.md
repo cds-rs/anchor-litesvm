@@ -1109,7 +1109,7 @@ Here's a complete example using many of these APIs:
 
 ```rust
 use anchor_litesvm::{AnchorLiteSVM, TestHelpers, AssertionHelpers, EventHelpers};
-use solana_sdk::signature::Signer;
+use solana_signer::Signer;
 
 anchor_lang::declare_program!(my_program);
 

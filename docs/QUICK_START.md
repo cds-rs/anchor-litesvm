@@ -16,9 +16,9 @@ Add `anchor-litesvm` to your dev dependencies:
 
 ```toml
 [dev-dependencies]
-anchor-litesvm = "0.1"
-solana-sdk = "1.18"
-anchor-lang = "0.30"
+anchor-litesvm = "0.4"
+anchor-lang = "1.0.0"
+solana-signer = "3.0.0"
 ```
 
 ## Your First Test
@@ -28,7 +28,7 @@ Here's a complete, working test you can copy and run:
 ```rust
 use anchor_litesvm::AnchorLiteSVM;
 use litesvm_utils::{AssertionHelpers, TestHelpers};
-use solana_sdk::signature::Signer;
+use solana_signer::Signer;
 
 // Generate client modules from your program's IDL
 anchor_lang::declare_program!(my_program);
@@ -60,7 +60,7 @@ fn test_my_first_instruction() {
             user_account: user.pubkey(),
             token_account,
             mint: mint.pubkey(),
-            system_program: solana_sdk::system_program::id(),
+            system_program: solana_system_interface::program::id(),
             token_program: spl_token::id(),
         })
         .args(my_program::client::args::Initialize {
@@ -221,7 +221,7 @@ let ix = ctx.program()
         mint_b: mint_b.pubkey(),  // Field 5 (swapped)
         mint_a: mint_a.pubkey(),  // Field 6 (swapped)
         // The generated struct ensures they are passed in the correct order
-        system_program: solana_sdk::system_program::id(),
+        system_program: solana_system_interface::program::id(),
         token_program: spl_token::id(),
         associated_token_program: spl_associated_token_account::id(),
     })

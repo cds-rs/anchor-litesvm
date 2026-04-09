@@ -57,7 +57,7 @@
 
 ```toml
 [dev-dependencies]
-anchor-litesvm = "0.3"
+anchor-litesvm = "0.4"
 ```
 
 ```rust
@@ -137,8 +137,8 @@ fn test_my_program() {
 
 ```bash
 # Run examples
-cargo run --example basic_usage
-cargo run --example advanced_features
+cargo run -p anchor-litesvm --example basic_usage
+cargo run -p anchor-litesvm --example advanced_features
 ```
 
 ## Testing

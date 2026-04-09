@@ -41,16 +41,16 @@ This guide helps you migrate your existing LiteSVM tests to `anchor-litesvm`.
 ```toml
 [dev-dependencies]
 litesvm = "0.1"
-solana-sdk = "1.18"
+solana-signer = "3.0.0"
 ```
 
 **After:**
 
 ```toml
 [dev-dependencies]
-anchor-litesvm = "0.1"  # Includes litesvm
-anchor-lang = "0.30"
-solana-sdk = "1.18"
+anchor-litesvm = "0.4"  # Includes litesvm-utils
+anchor-lang = "1.0.0"
+solana-signer = "3.0.0"
 ```
 
 ### Step 2: Generate Client Types
@@ -345,7 +345,8 @@ result.assert_error_code(6000);
 #[cfg(test)]
 mod tests {
     use litesvm::LiteSVM;
-    use solana_sdk::signature::{Keypair, Signer};
+    use solana_keypair::Keypair;
+    use solana_signer::Signer;
     use solana_program::instruction::{AccountMeta, Instruction};
     use sha2::{Digest, Sha256};
 
@@ -406,7 +407,7 @@ mod tests {
 #[cfg(test)]
 mod tests {
     use anchor_litesvm::{AnchorLiteSVM, TestHelpers, AssertionHelpers};
-    use solana_sdk::signature::Signer;
+    use solana_signer::Signer;
 
     anchor_lang::declare_program!(anchor_escrow);
 
