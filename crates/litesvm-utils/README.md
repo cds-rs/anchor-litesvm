@@ -97,6 +97,7 @@ result.assert_error("InsufficientFunds");
 
 // Debug
 result.print_logs();
+result.print_logs_structured();  // Display logs as a hierarchical tree
 let cu = result.compute_units();
 let logs = result.logs();
 ```

@@ -21,3 +21,6 @@ spl-token = { workspace = true }
 spl-associated-token-account = { workspace = true }
 solana-system-interface = { workspace = true }
 thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = "1.5"

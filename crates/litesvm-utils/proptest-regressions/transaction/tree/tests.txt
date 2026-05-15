@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 41b7967d912a687f9e7a5155d68832610e82caf6dfe58c0359c64dd4457e9c09 # shrinks to forest = [SimTree { name: "A", outcome: Failed(Some(" ")), compute_units: None, children: [] }]
+cc 1c2c76510bc817e1c4caf0e38073cbde91172d4cfa1067f4abad502e693a585d # shrinks to forest = [SimTree { name: "A", outcome: Success, compute_units: None, children: [SimTree { name: "_", outcome: Success, compute_units: None, children: [SimTree { name: "of", outcome: Success, compute_units: Some(0), children: [] }] }] }]
