@@ -69,10 +69,19 @@
 //! ```
 //!
 //! ### Clock Manipulation
-//! Test time-based logic:
+//! Test time-based logic. Slot-based helpers for slot-anchored constraints,
+//! timestamp-based helpers for `unix_timestamp` constraints (e.g. escrow
+//! expiries, vesting cliffs):
 //! ```rust,ignore
+//! // Slot-based
 //! let slot = svm.get_current_slot();
 //! svm.advance_slot(100);
+//!
+//! // Timestamp-based (Clock sysvar's unix_timestamp)
+//! let now = svm.get_unix_timestamp();
+//! svm.warp_to_timestamp(1_700_000_000);
+//! svm.advance_seconds(3_600);
+//! svm.advance_days(30);
 //! ```
 //!
 //! ## Quick Start
