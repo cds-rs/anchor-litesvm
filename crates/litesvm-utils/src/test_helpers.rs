@@ -661,6 +661,16 @@ mod tests {
     }
 
     #[test]
+    fn test_get_unix_timestamp_matches_clock_sysvar() {
+        let svm = LiteSVM::new();
+
+        let ts = svm.get_unix_timestamp();
+        let expected = svm.get_sysvar::<solana_program::clock::Clock>().unix_timestamp;
+
+        assert_eq!(ts, expected);
+    }
+
+    #[test]
     fn test_warp_to_timestamp_sets_unix_timestamp() {
         let mut svm = LiteSVM::new();
         let target: i64 = 1_700_000_000;
