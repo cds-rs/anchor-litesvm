@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-No unreleased changes yet.
+### Added
+
+- `litesvm-utils`: four timestamp-based helpers on the `TestHelpers` trait for
+  testing time-locked logic (escrow expiries, vesting cliffs, etc.) without
+  manually round-tripping the `Clock` sysvar:
+  - `get_unix_timestamp()` reads the Clock sysvar's `unix_timestamp`
+  - `warp_to_timestamp(unix_ts)` sets `unix_timestamp` to an absolute value
+  - `advance_seconds(seconds)` advances `unix_timestamp` by the given seconds
+  - `advance_days(days)` convenience wrapper over `advance_seconds`
+
+  Other Clock fields (slot, epoch, etc.) are left unchanged; for slot-based
+  warping, continue using `advance_slot` / `warp_to_slot`.
 
 ## [anchor-litesvm 0.4.0] - 2026-04-09
 

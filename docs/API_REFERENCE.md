@@ -13,7 +13,7 @@ Complete API documentation for `anchor-litesvm` and `litesvm-utils`.
 - [Event Parsing](#event-parsing)
 - [Account Operations](#account-operations)
 - [PDA Operations](#pda-operations)
-- [Clock & Slot](#clock--slot)
+- [Clock & Time](#clock--time)
 
 ---
 
@@ -1007,7 +1007,13 @@ let (pda, bump) = ctx.svm.derive_pda(&[b"seed"], &program_id);
 
 ---
 
-## Clock & Slot
+## Clock & Time
+
+The Clock sysvar exposes two independently-warpable fields most tests care
+about: `slot` and `unix_timestamp`. Use the slot helpers when your program
+reads `Clock::get()?.slot`; use the timestamp helpers when it reads
+`Clock::get()?.unix_timestamp` (e.g. escrow expiries, vesting cliffs).
+The two families don't interfere with each other.
 
 ### `get_current_slot()`
 
@@ -1042,6 +1048,79 @@ fn advance_slot(&mut self, slots: u64)
 ```rust
 ctx.svm.advance_slot(100);
 let new_slot = ctx.svm.get_current_slot();
+```
+
+---
+
+### `get_unix_timestamp()`
+
+Get the Clock sysvar's `unix_timestamp`.
+
+```rust
+fn get_unix_timestamp(&self) -> i64
+```
+
+**Returns:** Current Unix timestamp (seconds since the Unix epoch)
+
+**Example:**
+```rust
+let now = ctx.svm.get_unix_timestamp();
+```
+
+---
+
+### `warp_to_timestamp()`
+
+Set the Clock sysvar's `unix_timestamp` to an absolute value. Other Clock
+fields (`slot`, `epoch`, etc.) are left unchanged.
+
+```rust
+fn warp_to_timestamp(&mut self, unix_timestamp: i64)
+```
+
+**Parameters:**
+- `unix_timestamp`: Target Unix timestamp (seconds since the Unix epoch)
+
+**Example:**
+```rust
+ctx.svm.warp_to_timestamp(1_700_000_000);
+```
+
+---
+
+### `advance_seconds()`
+
+Advance `unix_timestamp` by the given number of seconds.
+
+```rust
+fn advance_seconds(&mut self, seconds: i64)
+```
+
+**Parameters:**
+- `seconds`: Seconds to advance (negative values rewind the clock)
+
+**Example:**
+```rust
+ctx.svm.advance_seconds(3_600); // +1 hour
+```
+
+---
+
+### `advance_days()`
+
+Convenience wrapper over `advance_seconds` for time-locked constraints
+expressed in days (escrow expiries, vesting cliffs, etc.).
+
+```rust
+fn advance_days(&mut self, days: i64)
+```
+
+**Parameters:**
+- `days`: Days to advance (negative values rewind the clock)
+
+**Example:**
+```rust
+ctx.svm.advance_days(30);
 ```
 
 ---
