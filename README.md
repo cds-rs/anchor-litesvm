@@ -144,12 +144,12 @@ cargo run -p anchor-litesvm --example advanced_features
 ## Testing
 
 ```bash
-# Run all tests (63 total)
+# Run all tests (67 total)
 cargo test
 
 # Run specific crate tests
 cargo test -p anchor-litesvm    # 11 tests
-cargo test -p litesvm-utils     # 52 tests
+cargo test -p litesvm-utils     # 56 tests
 ```
 
 ## License

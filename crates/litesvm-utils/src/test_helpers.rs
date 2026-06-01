@@ -178,6 +178,57 @@ pub trait TestHelpers {
 
     /// Advance the slot by a specified amount
     fn advance_slot(&mut self, slots: u64);
+
+    /// Get the current Unix timestamp from the Clock sysvar.
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use litesvm_utils::TestHelpers;
+    /// # use litesvm::LiteSVM;
+    /// # let svm = LiteSVM::new();
+    /// let now = svm.get_unix_timestamp();
+    /// ```
+    fn get_unix_timestamp(&self) -> i64;
+
+    /// Set the Clock sysvar's `unix_timestamp` to the given absolute value.
+    ///
+    /// Use this when a test needs a deterministic wall-clock value (e.g.
+    /// setting up an escrow expiry relative to a known anchor point). Other
+    /// Clock fields (slot, epoch, etc.) are left unchanged.
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use litesvm_utils::TestHelpers;
+    /// # use litesvm::LiteSVM;
+    /// # let mut svm = LiteSVM::new();
+    /// svm.warp_to_timestamp(1_700_000_000);
+    /// ```
+    fn warp_to_timestamp(&mut self, unix_timestamp: i64);
+
+    /// Advance the Clock sysvar's `unix_timestamp` by the given number of
+    /// seconds.
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use litesvm_utils::TestHelpers;
+    /// # use litesvm::LiteSVM;
+    /// # let mut svm = LiteSVM::new();
+    /// svm.advance_seconds(3_600); // jump forward one hour
+    /// ```
+    fn advance_seconds(&mut self, seconds: i64);
+
+    /// Advance the Clock sysvar's `unix_timestamp` by the given number of
+    /// days. Convenience wrapper over `advance_seconds` for time-locked
+    /// constraints expressed in days (escrow expiries, vesting cliffs, etc.).
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use litesvm_utils::TestHelpers;
+    /// # use litesvm::LiteSVM;
+    /// # let mut svm = LiteSVM::new();
+    /// svm.advance_days(30); // jump forward 30 days
+    /// ```
+    fn advance_days(&mut self, days: i64);
 }
 
 impl TestHelpers for LiteSVM {
@@ -354,6 +405,25 @@ impl TestHelpers for LiteSVM {
         for i in 0..slots {
             self.warp_to_slot(current_slot + i + 1);
         }
+    }
+
+    fn get_unix_timestamp(&self) -> i64 {
+        self.get_sysvar::<solana_program::clock::Clock>().unix_timestamp
+    }
+
+    fn warp_to_timestamp(&mut self, unix_timestamp: i64) {
+        let mut clock = self.get_sysvar::<solana_program::clock::Clock>();
+        clock.unix_timestamp = unix_timestamp;
+        self.set_sysvar(&clock);
+    }
+
+    fn advance_seconds(&mut self, seconds: i64) {
+        let current = self.get_unix_timestamp();
+        self.warp_to_timestamp(current + seconds);
+    }
+
+    fn advance_days(&mut self, days: i64) {
+        self.advance_seconds(days * 24 * 60 * 60);
     }
 }
 
@@ -588,5 +658,48 @@ mod tests {
 
         svm.advance_slot(5);
         assert_eq!(svm.get_current_slot(), 40);
+    }
+
+    #[test]
+    fn test_warp_to_timestamp_sets_unix_timestamp() {
+        let mut svm = LiteSVM::new();
+        let target: i64 = 1_700_000_000;
+
+        svm.warp_to_timestamp(target);
+
+        assert_eq!(svm.get_unix_timestamp(), target);
+    }
+
+    #[test]
+    fn test_advance_seconds_moves_clock_forward() {
+        let mut svm = LiteSVM::new();
+        let initial = svm.get_unix_timestamp();
+
+        svm.advance_seconds(3_600);
+
+        assert_eq!(svm.get_unix_timestamp(), initial + 3_600);
+    }
+
+    #[test]
+    fn test_advance_days_moves_clock_forward_by_seconds() {
+        let mut svm = LiteSVM::new();
+        let initial = svm.get_unix_timestamp();
+
+        // 7 * 24 * 60 * 60
+        const SEVEN_DAYS_SECS: i64 = 604_800;
+        svm.advance_days(7);
+
+        assert_eq!(svm.get_unix_timestamp(), initial + SEVEN_DAYS_SECS);
+    }
+
+    #[test]
+    fn test_advance_seconds_is_additive() {
+        let mut svm = LiteSVM::new();
+        let initial = svm.get_unix_timestamp();
+
+        svm.advance_seconds(60);
+        svm.advance_seconds(120);
+
+        assert_eq!(svm.get_unix_timestamp(), initial + 180);
     }
 }

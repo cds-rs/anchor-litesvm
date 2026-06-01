@@ -133,13 +133,25 @@ let pda = svm.derive_pda(&[b"seed"], &program_id);
 
 ### Clock Manipulation
 
-```rust
-// Get current slot
-let slot = svm.get_current_slot();
+Two flavors, depending on whether your program reads the Clock sysvar's
+`slot` or its `unix_timestamp`:
 
-// Advance time
+```rust
+// Slot-based (for slot-anchored constraints)
+let slot = svm.get_current_slot();
 svm.advance_slot(100);
+
+// Timestamp-based (for unix_timestamp constraints:
+// escrow expiries, vesting cliffs, etc.)
+let now = svm.get_unix_timestamp();
+svm.warp_to_timestamp(1_700_000_000); // absolute set
+svm.advance_seconds(3_600);           // +1 hour
+svm.advance_days(30);                 // +30 days
 ```
+
+The timestamp helpers set the Clock sysvar's `unix_timestamp` directly and
+leave other fields (slot, epoch, etc.) alone, so they compose with the
+slot-based helpers above.
 
 ## API Reference
 
@@ -178,7 +190,7 @@ let svm = LiteSVMBuilder::new()
 This crate has comprehensive test coverage:
 
 ```bash
-cargo test -p litesvm-utils    # 52 tests
+cargo test -p litesvm-utils    # 56 tests
 ```
 
 ## Related Crates
