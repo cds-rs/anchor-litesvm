@@ -28,7 +28,7 @@ litesvm-utils = "0.4"
 ## Quick Start
 
 ```rust
-use litesvm_utils::{LiteSVMBuilder, TestHelpers, AssertionHelpers, TransactionHelpers};
+use litesvm_utils::{Aliases, AssertionHelpers, LiteSVMBuilder, TestHelpers, TransactionHelpers};
 use solana_signer::Signer;
 
 #[test]
@@ -97,6 +97,10 @@ result.assert_error("InsufficientFunds");
 
 // Debug
 result.print_logs();
+// Annotated CPI tree with signer=X rows and friendly program names. If
+// the result was returned by send_ok / send_err / send_err_named the
+// alias table is already stashed; otherwise attach one explicitly:
+result.with_aliases(Aliases::default()).print_logs_structured();
 let cu = result.compute_units();
 let logs = result.logs();
 ```
@@ -178,7 +182,7 @@ let svm = LiteSVMBuilder::new()
 This crate has comprehensive test coverage:
 
 ```bash
-cargo test -p litesvm-utils    # 52 tests
+cargo test -p litesvm-utils    # 53 tests
 ```
 
 ## Related Crates

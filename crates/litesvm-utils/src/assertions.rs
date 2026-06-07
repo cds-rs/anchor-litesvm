@@ -4,7 +4,6 @@
 //! account states in tests.
 
 use litesvm::LiteSVM;
-use litesvm_token::spl_token;
 use solana_program::pubkey::Pubkey;
 use solana_program_pack::Pack;
 
@@ -198,7 +197,7 @@ impl AssertionHelpers for LiteSVM {
 mod tests {
     use super::*;
     use crate::test_helpers::TestHelpers;
-    use solana_signer::Signer;
+    use solana_sdk::signer::Signer;
 
     #[test]
     fn test_assert_account_closed_nonexistent() {

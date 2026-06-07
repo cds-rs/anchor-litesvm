@@ -71,11 +71,11 @@ impl LiteSVMBuilder {
     /// let mut svm = builder.build();
     /// ```
     pub fn build(mut self) -> LiteSVM {
-        // Deploy all programs
+        // LTS / 0.31 branch: litesvm 0.6's `add_program` returns `()`
+        // (success is silent; failure panics inside the call). Newer
+        // litesvm returns `Result<(), _>`. No-Result form below.
         for (program_id, program_bytes) in self.programs {
-            self.svm
-                .add_program(program_id, &program_bytes)
-                .expect("Failed to add program");
+            self.svm.add_program(program_id, &program_bytes);
         }
 
         self.svm
@@ -163,8 +163,8 @@ pub trait ProgramTestExt {
 
 impl ProgramTestExt for LiteSVM {
     fn deploy_program(&mut self, program_id: Pubkey, program_bytes: &[u8]) {
-        self.add_program(program_id, program_bytes)
-            .expect("Failed to deploy program");
+        // See note in `build`: 0.6 returns `()`.
+        self.add_program(program_id, program_bytes);
     }
 }
 
@@ -191,11 +191,9 @@ mod tests {
         let program_id = Pubkey::new_unique();
         let program_bytes = vec![1, 2, 3, 4];
 
-        // Test that builder fluent API works - don't call build() to avoid validation
         let mut builder = LiteSVMBuilder::new();
         builder = builder.deploy_program(program_id, &program_bytes);
 
-        // Verify the program was added to the builder
         assert_eq!(builder.programs.len(), 1);
         assert_eq!(builder.programs[0].0, program_id);
     }

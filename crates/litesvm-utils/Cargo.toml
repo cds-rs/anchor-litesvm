@@ -1,23 +1,27 @@
 [package]
 name = "litesvm-utils"
-version = "0.4.0"
+version = "0.4.0-anchor-0.31"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme = "README.md"
-description = "Test helpers for LiteSVM - one-line token operations, assertions, and account management"
+description = "[LTS / anchor 0.31 compat] Test helpers for LiteSVM. Frozen branch; see MIGRATING.md."
 documentation = "https://docs.rs/litesvm-utils"
 keywords = ["solana", "litesvm", "testing", "blockchain", "utilities"]
 
 [dependencies]
 litesvm = { workspace = true }
-litesvm-token = { workspace = true }
+solana-sdk = { workspace = true }
 solana-program = { workspace = true }
 solana-program-pack = { workspace = true }
-solana-keypair = { workspace = true }
-solana-signer = { workspace = true }
-solana-transaction = { workspace = true }
+# `solana-message` is pulled in transitively via litesvm 0.6, but the
+# tree renderer (transaction/tree.rs) references the inner_instruction
+# types directly so we declare the dependency explicitly.
+solana-message = "=2.2"
 spl-token = { workspace = true }
 spl-associated-token-account = { workspace = true }
-solana-system-interface = { workspace = true }
+indexmap = "2.12"
 thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = "1.5"
