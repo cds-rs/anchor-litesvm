@@ -19,7 +19,9 @@ solana-program-pack = { workspace = true }
 # types directly so we declare the dependency explicitly.
 solana-message = "=2.2"
 spl-token = { workspace = true }
+spl-token-2022 = { workspace = true }
 spl-associated-token-account = { workspace = true }
+spl-transfer-hook-interface = { workspace = true }
 indexmap = "2.12"
 thiserror = { workspace = true }
 

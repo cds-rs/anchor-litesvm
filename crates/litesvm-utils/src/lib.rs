@@ -171,6 +171,7 @@ pub mod cpi_tree;
 pub mod metaplex;
 pub mod report;
 pub mod test_helpers;
+pub mod token_hooks;
 pub mod tokens;
 pub mod transaction;
 
@@ -183,6 +184,7 @@ pub use metaplex::{
 };
 pub use report::{MarkdownBlock, Report, ToMarkdown};
 pub use test_helpers::TestHelpers;
+pub use token_hooks::TransferHookTesting;
 pub use tokens::{TokenFabrication, TokenProgram, TOKEN_2022_ID};
 pub use transaction::{
     Aliases, InstructionInfo, TransactionError, TransactionHelpers, TransactionResult,
