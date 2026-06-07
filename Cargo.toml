@@ -2,6 +2,7 @@
 members = [
     "crates/litesvm-utils",
     "crates/anchor-litesvm",
+    "crates/anchor-litesvm-derive",
 ]
 resolver = "2"
 
@@ -12,17 +13,28 @@ repository = "https://github.com/brimigs/anchor-litesvm"
 keywords = ["solana", "anchor", "litesvm", "testing", "blockchain"]
 
 [workspace.dependencies]
-litesvm = "0.11.0"
-litesvm-token = "0.11.0"
+# Temporary path dep: tracks the unreleased 0.12 in the sibling litesvm tree
+# (adds `cpi_tree`). Switch back to `litesvm = "0.12"` once that ships on crates.io.
+litesvm = { path = "../litesvm/crates/litesvm" }
 anchor-lang = "1.0.0"
 solana-program = "3.0.0"
 solana-program-pack = "3.1.0"
+solana-message = "3.1"
 solana-keypair = "3.1.2"
 solana-signer = "3.0.0"
-solana-transaction = { version = "3.0.1", features = ["bincode"] }
+solana-transaction = { version = "3.0", features = ["bincode"] }
 borsh = "1.5.3"
 sha2 = "0.10.8"
 thiserror = "2.0.18"
-spl-token = "9.0.0"
-spl-associated-token-account = "8.0.0"
-solana-system-interface = { version = "2.0.0", features = ["bincode"] }
+# `no-entrypoint` keeps these SPL crates from compiling in their own
+# `entrypoint` symbol. Without it, downstream Anchor programs that depend on
+# anchor-litesvm hit a duplicate-`entrypoint` link error on Linux (GNU `ld`);
+# macOS's `ld64` silently tolerates the collision, which is why this only
+# shows up on Linux hosts.
+spl-token = { version = "9.0.0", features = ["no-entrypoint"] }
+spl-associated-token-account = { version = "8.0.0", features = ["no-entrypoint"] }
+solana-system-interface = { version = "3.2", features = ["bincode"] }
+syn = { version = "2", features = ["full", "extra-traits"] }
+quote = "1"
+proc-macro2 = "1"
+trybuild = "1"
