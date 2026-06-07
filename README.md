@@ -4,7 +4,7 @@
 >
 > This branch exists **solely** to support projects that depend on
 > `mpl-core`'s `anchor` feature (still pinned to `anchor-lang = "0.31.1"`
-> upstream). It is **bug-fixes only** — no forward features will be
+> upstream). It is **bug-fixes only**: no forward features will be
 > backported. The branch will be **deprecated and archived** as soon as
 > upstream mpl-core ships an `anchor-lang = "1.0"` release.
 >
@@ -78,33 +78,40 @@ anchor-litesvm = { git = "https://github.com/cds-rs/anchor-litesvm", branch = "c
 
 ```rust
 use anchor_litesvm::AnchorLiteSVM;
-use litesvm_utils::{AssertionHelpers, TestHelpers};
-
-anchor_lang::declare_program!(my_program);
+use litesvm_utils::TestHelpers;
+use my_program::{instruction as vix, test_helpers::InitializeBundle};
 
 #[test]
 fn test_my_program() {
-    // One-line setup
+    // One-line setup: deploy the program. The name registers as a pubkey alias,
+    // so structured logs read `my_program::Initialize`, not the raw program id.
     let mut ctx = AnchorLiteSVM::build_with_program(
         my_program::ID,
         "my_program",
         include_bytes!("../target/deploy/my_program.so"),
     );
 
-    // Create accounts
     let user = ctx.svm.create_funded_account(10_000_000_000).unwrap();
 
-    // Build instruction with simplified syntax
-    let ix = ctx.program()
-        .accounts(my_program::client::accounts::Initialize { user: user.pubkey(), .. })
-        .args(my_program::client::args::Initialize { amount: 100 })
-        .instruction()
-        .unwrap();
+    // Build, send, and assert in one chain. The bundle names the accounts; the
+    // BundledPubkeys derive on the program orders them, so there is no
+    // hand-built Vec<AccountMeta> and no client codegen.
+    ctx.tx(&[&user])
+        .build(
+            InitializeBundle { user: user.pubkey() },
+            vix::Initialize { amount: 100 },
+        )
+        .send_ok(); // builds, sends, asserts success
 
-    // Execute and verify
-    ctx.execute_instruction(ix, &[&user]).unwrap().assert_success();
+    // Then assert on-chain state with ctx.svm.assert_* or ctx.get_account::<T>().
 }
 ```
+
+`InitializeBundle` is a small `#[derive(Bundle)]` struct of pubkeys in your
+program's host-only `test_helpers` module, bound to the instruction's
+`#[derive(Accounts)]` struct with
+`#[cfg_attr(not(target_os = "solana"), derive(BundledPubkeys), bundled_with(InitializeBundle))]`.
+See [EVALUATING.md](./EVALUATING.md) for the complete program-side setup.
 
 ### For Non-Anchor Programs
 
