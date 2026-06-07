@@ -1,14 +1,14 @@
 # litesvm-utils
 
-**Framework-agnostic testing utilities for LiteSVM** - One-line token operations, assertions, and account management for any Solana program.
+**Framework-agnostic testing utilities for LiteSVM**: one-line token operations, assertions, and account management for any Solana program.
 
-[![Crates.io](https://img.shields.io/crates/v/litesvm-utils.svg)](https://crates.io/crates/litesvm-utils)
-[![Documentation](https://docs.rs/litesvm-utils/badge.svg)](https://docs.rs/litesvm-utils)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+> Part of the `compat/anchor-0.31` LTS branch, distributed via git only (not crates.io).
 
 ## Overview
 
-`litesvm-utils` provides ergonomic testing utilities that work with **any Solana program** - Native, Anchor, SPL, or custom frameworks. It eliminates boilerplate by providing one-line helpers for common testing operations.
+`litesvm-utils` provides ergonomic testing utilities that work with **any Solana program**: Native, Anchor, SPL, or custom frameworks. It eliminates boilerplate by providing one-line helpers for common testing operations.
 
 **Use this crate if you're testing:**
 - Native Solana programs
@@ -16,20 +16,20 @@
 - Non-Anchor custom frameworks
 - Or if you need just testing utilities without Anchor-specific features
 
-> **Note:** If you're testing Anchor programs, consider using [`anchor-litesvm`](https://crates.io/crates/anchor-litesvm) instead, which builds on this crate and adds Anchor-specific features.
+> **Note:** If you're testing Anchor programs, consider using [`anchor-litesvm`](../anchor-litesvm) instead, which builds on this crate and adds Anchor-specific features.
 
 ## Installation
 
 ```toml
 [dev-dependencies]
-litesvm-utils = "0.4"
+litesvm-utils = { git = "https://github.com/cds-rs/anchor-litesvm", branch = "compat/anchor-0.31" }
 ```
 
 ## Quick Start
 
 ```rust
 use litesvm_utils::{Aliases, AssertionHelpers, LiteSVMBuilder, TestHelpers, TransactionHelpers};
-use solana_signer::Signer;
+use solana_sdk::signer::Signer;
 
 #[test]
 fn test_my_program() {
@@ -80,6 +80,30 @@ let ata = svm.create_associated_token_account(&mint.pubkey(), &owner)?;
 // Mint tokens
 svm.mint_to(&mint.pubkey(), &token_account, &authority, 1_000_000)?;
 ```
+
+### Account Fabrication
+
+For tests that need an account to simply *exist* with chosen contents (an NFT a
+program inspects, a holder with a balance) without minting it for real, write the
+bytes directly:
+
+```rust
+use litesvm_utils::{MetadataArgs, MetaplexHelpers, TokenFabrication, TokenProgram, TransferHookTesting};
+
+// SPL / Token-2022 mints and token accounts, no init transaction
+svm.fabricate_nft_mint(&mint, TokenProgram::Spl);
+svm.fabricate_token_account(&holder, TokenProgram::Spl, &mint, &owner, 1);
+
+// A full Metaplex Token Metadata account at the canonical PDA, hand-serialized
+// (no mpl-token-metadata dependency)
+let metadata = svm.fabricate_metadata(&mint, &MetadataArgs::default());
+
+// Token-2022 transfer hooks: a hook mint, Token-2022 ATAs, and a transfer_checked
+// whose extra accounts resolve from the on-chain ExtraAccountMetaList
+let mint = svm.create_transfer_hook_mint(&authority, 0, &hook_program)?;
+```
+
+See `cargo run -p litesvm-utils --example fabricate_nft` for a complete NFT.
 
 ### Transaction Helpers
 
@@ -182,13 +206,13 @@ let svm = LiteSVMBuilder::new()
 This crate has comprehensive test coverage:
 
 ```bash
-cargo test -p litesvm-utils    # 53 tests
+cargo test -p litesvm-utils
 ```
 
 ## Related Crates
 
-- [`anchor-litesvm`](https://crates.io/crates/anchor-litesvm) - Anchor-specific testing (builds on this crate)
-- [`litesvm`](https://crates.io/crates/litesvm) - The underlying fast Solana VM
+- [`anchor-litesvm`](../anchor-litesvm): Anchor-specific testing (builds on this crate)
+- [`litesvm`](https://crates.io/crates/litesvm): the underlying fast Solana VM
 
 ## License
 
