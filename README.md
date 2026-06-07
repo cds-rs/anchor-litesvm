@@ -1,5 +1,7 @@
 # anchor-litesvm Workspace
 
+*A fork of [anchor-litesvm](https://github.com/brimigs/anchor-litesvm) by [@brimigs](https://github.com/brimigs), maintained for the anchor-0.31 ecosystem.*
+
 > ⚠ **You are on the `compat/anchor-0.31` LTS branch.**
 >
 > This branch exists **solely** to support projects that depend on
@@ -182,5 +184,9 @@ cargo test --workspace
 MIT License - see [LICENSE](LICENSE) for details.
 
 ## Acknowledgments
+
+This project is a fork of [anchor-litesvm](https://github.com/brimigs/anchor-litesvm)
+by [@brimigs](https://github.com/brimigs); the `compat/anchor-0.31` branch extends her
+original crates for the anchor-0.31 / mpl-core ecosystem.
 
 Built on top of [LiteSVM](https://github.com/LiteSVM/litesvm), a fast and lightweight Solana VM for testing.

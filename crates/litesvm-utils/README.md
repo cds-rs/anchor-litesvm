@@ -6,6 +6,8 @@
 
 > Part of the `compat/anchor-0.31` LTS branch, distributed via git only (not crates.io).
 
+> A fork of [anchor-litesvm](https://github.com/brimigs/anchor-litesvm) by [@brimigs](https://github.com/brimigs).
+
 ## Overview
 
 `litesvm-utils` provides ergonomic testing utilities that work with **any Solana program**: Native, Anchor, SPL, or custom frameworks. It eliminates boilerplate by providing one-line helpers for common testing operations.

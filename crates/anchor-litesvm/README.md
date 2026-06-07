@@ -6,6 +6,8 @@
 
 > Part of the `compat/anchor-0.31` LTS branch, distributed via git only (not crates.io).
 
+> A fork of [anchor-litesvm](https://github.com/brimigs/anchor-litesvm) by [@brimigs](https://github.com/brimigs).
+
 ## Overview
 
 `anchor-litesvm` provides a streamlined testing experience for Anchor programs. It pairs bundle-based instruction building with the speed of LiteSVM, plus comprehensive testing utilities.
