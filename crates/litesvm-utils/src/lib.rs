@@ -168,16 +168,22 @@ pub mod actors;
 pub mod assertions;
 pub mod builder;
 pub mod cpi_tree;
+pub mod metaplex;
 pub mod report;
 pub mod test_helpers;
+pub mod tokens;
 pub mod transaction;
 
 // Re-export main types for convenience
 pub use actors::{deterministic_keypair, seed_bytes, ActorRegistry};
 pub use assertions::AssertionHelpers;
 pub use builder::{LiteSVMBuilder, ProgramTestExt};
+pub use metaplex::{
+    Creator, MetadataArgs, MetaplexHelpers, TokenStandard, METADATA_SEED, MPL_TOKEN_METADATA_ID,
+};
 pub use report::{MarkdownBlock, Report, ToMarkdown};
 pub use test_helpers::TestHelpers;
+pub use tokens::{TokenFabrication, TokenProgram, TOKEN_2022_ID};
 pub use transaction::{
     Aliases, InstructionInfo, TransactionError, TransactionHelpers, TransactionResult,
 };
