@@ -13,6 +13,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   parked TDD red spec, expected to abort. Pairs with `#[should_panic]`: the
   attribute keeps `cargo test` green while the spec is parked, the marker keeps
   the report honest (`RED (expected)` + the reason, instead of `PASS`).
+- SPL / Token-2022 account *fabrication* (litesvm-utils `TokenFabrication`):
+  `fabricate_mint` / `fabricate_nft_mint` / `fabricate_token_account` write the
+  account bytes directly, for tests that need an account to simply exist without
+  a minting transaction.
+- Metaplex Token Metadata fabrication (litesvm-utils `MetaplexHelpers`):
+  `fabricate_metadata` writes a full Token Metadata account at the canonical
+  PDA, hand-serialized so there is no `mpl-token-metadata` dependency.
+- Token-2022 transfer-hook test helpers (litesvm-utils `TransferHookTesting`):
+  create a transfer-hook mint and Token-2022 ATAs, and build a `transfer_checked`
+  whose extra accounts resolve from the on-chain `ExtraAccountMetaList`.
+- `Lazy<D>` bundle fields (anchor-litesvm): a bundle field resolved against live
+  SVM state at build time (`Resolve` / `Resolvable`), kept `Copy`.
+  `#[derive(Bundle)]` now emits the `Resolvable` impl that `Tx::build` runs
+  before projecting the bundle onto account metas.
 
 ### Changed
 

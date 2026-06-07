@@ -15,10 +15,12 @@
 
 **Two powerful crates for Solana program testing with LiteSVM**
 
-| Crate | Description | crates.io | docs.rs |
-|-------|-------------|-----------|---------|
-| **[anchor-litesvm](crates/anchor-litesvm)** | Anchor-specific testing with simplified syntax | [![Crates.io](https://img.shields.io/crates/v/anchor-litesvm.svg)](https://crates.io/crates/anchor-litesvm) | [![docs.rs](https://docs.rs/anchor-litesvm/badge.svg)](https://docs.rs/anchor-litesvm) |
-| **[litesvm-utils](crates/litesvm-utils)** | Framework-agnostic testing utilities | [![Crates.io](https://img.shields.io/crates/v/litesvm-utils.svg)](https://crates.io/crates/litesvm-utils) | [![docs.rs](https://docs.rs/litesvm-utils/badge.svg)](https://docs.rs/litesvm-utils) |
+| Crate | Description |
+|-------|-------------|
+| **[anchor-litesvm](crates/anchor-litesvm)** | Anchor-specific testing with simplified syntax |
+| **[litesvm-utils](crates/litesvm-utils)** | Framework-agnostic testing utilities |
+
+> This branch is distributed **via git only** (not published to crates.io); see [Quick Start](#quick-start) for the dependency form.
 
 ## Which Crate Should I Use?
 
@@ -69,8 +71,9 @@
 ### For Anchor Programs
 
 ```toml
-[dev-dependencies]
-anchor-litesvm = "0.4"
+# Host-only: the test machinery, never compiled into the on-chain binary.
+[target.'cfg(not(target_os = "solana"))'.dependencies]
+anchor-litesvm = { git = "https://github.com/cds-rs/anchor-litesvm", branch = "compat/anchor-0.31" }
 ```
 
 ```rust
@@ -107,7 +110,7 @@ fn test_my_program() {
 
 ```toml
 [dev-dependencies]
-litesvm-utils = "0.4"
+litesvm-utils = { git = "https://github.com/cds-rs/anchor-litesvm", branch = "compat/anchor-0.31" }
 ```
 
 ```rust
@@ -153,17 +156,18 @@ fn test_my_program() {
 # Run examples
 cargo run -p anchor-litesvm --example basic_usage
 cargo run -p anchor-litesvm --example advanced_features
+# Fabricate a complete NFT (mint + Token Metadata + holder), no minting tx:
+cargo run -p litesvm-utils --example fabricate_nft
 ```
 
 ## Testing
 
 ```bash
-# Run all tests (63 total)
-cargo test
+# The compatibility check: full workspace suite + the fabrication example
+just test-compat
 
-# Run specific crate tests
-cargo test -p anchor-litesvm    # 11 tests
-cargo test -p litesvm-utils     # 52 tests
+# Or directly:
+cargo test --workspace
 ```
 
 ## License
