@@ -112,11 +112,10 @@ fn extract_fixtures(input: &DeriveInput) -> Result<Vec<(syn::Ident, syn::Type)>>
         }
         let bindings: FixtureBindings = attr.parse_args()?;
         let parsed: Vec<_> = bindings.0.into_iter().map(|b| (b.name, b.ty)).collect();
-        if parsed.len() < 2 {
+        if parsed.is_empty() {
             return Err(Error::new(
                 attr.span(),
-                "#[from_fixtures(...)] requires at least 2 bindings; \
-                 use #[derive(BundledPubkeys)] or a hand-written From for the single-source case",
+                "#[from_fixtures(...)] requires at least one binding",
             ));
         }
         if found.is_some() {
@@ -202,8 +201,19 @@ fn infer_source(_field: &syn::Ident, fixtures: &[(syn::Ident, syn::Type)]) -> Re
 
 fn emit(spec: &Spec) -> TokenStream {
     let bundle = &spec.bundle_ident;
-    let fixture_pat = fixture_tuple_pat(&spec.fixtures);
-    let fixture_ty = fixture_tuple_ty(&spec.fixtures);
+    // A single fixture composes from `&Fixture` directly; multiple fixtures use
+    // a tuple `(&A, &B)`. The single-fixture form is the "derive the whole cast
+    // from one root" case (e.g. a session's owner + key), not just composition.
+    let (fixture_pat, fixture_ty) = if spec.fixtures.len() == 1 {
+        let (name, ty) = &spec.fixtures[0];
+        let ty = ty.to_token_stream();
+        (quote!(#name), quote!(&'__fixt #ty))
+    } else {
+        (
+            fixture_tuple_pat(&spec.fixtures),
+            fixture_tuple_ty(&spec.fixtures),
+        )
+    };
     let assignments = spec.fields.iter().map(|f| {
         let name = &f.name;
         match &f.source {
@@ -262,13 +272,15 @@ mod tests {
     }
 
     #[test]
-    fn errors_on_single_fixture() {
+    fn allows_single_fixture() {
+        // The single-fixture form is the "derive the whole cast from one root"
+        // case (e.g. a session's owner + key), emitting `From<&Root>`.
         let input: DeriveInput = parse_quote! {
-            #[from_fixtures(p: Pool)]
+            #[from_fixtures(r: SessionRoot)]
             struct B { a: Pubkey }
         };
-        let err = parse_spec(&input).expect_err("must error");
-        assert!(err.to_string().contains("at least 2"));
+        let spec = parse_spec(&input).expect("single fixture is allowed");
+        assert_eq!(spec.fixtures.len(), 1);
     }
 
     #[test]

@@ -76,11 +76,14 @@ impl<'a> Tx<'a> {
     /// instruction. That's deliberate: lets test helpers fabricate a
     /// preliminary ix for type-checking and then overwrite it under
     /// some condition without restarting the chain.
-    pub fn build<B, A>(mut self, bundle: B, args: A) -> Self
+    pub fn build<B, A>(mut self, mut bundle: B, args: A) -> Self
     where
         A: BuildableIx<B>,
-        B: Into<A::Accounts>,
+        B: Into<A::Accounts> + crate::Resolvable,
     {
+        // Resolve any `Lazy` bundle fields against live SVM state before the
+        // bundle projects onto account metas. A no-op for plain `Pubkey` fields.
+        bundle.resolve_all(&*self.ctx);
         self.ix = Some(self.ctx.program().build_ix(bundle, args));
         self
     }
@@ -90,12 +93,13 @@ impl<'a> Tx<'a> {
     /// computed. Same shape as [`crate::Program::build_ix_with`];
     /// useful for negative-path tests that need to inject a wrong
     /// account.
-    pub fn build_with<B, A, F>(mut self, bundle: B, args: A, modify: F) -> Self
+    pub fn build_with<B, A, F>(mut self, mut bundle: B, args: A, modify: F) -> Self
     where
         A: BuildableIx<B>,
-        B: Into<A::Accounts>,
+        B: Into<A::Accounts> + crate::Resolvable,
         F: FnOnce(&mut A::Accounts),
     {
+        bundle.resolve_all(&*self.ctx);
         self.ix = Some(self.ctx.program().build_ix_with(bundle, args, modify));
         self
     }
@@ -181,6 +185,11 @@ mod tests {
     impl InstructionData for TestArgs {}
     impl BuildableIx<TestBundle> for TestArgs {
         type Accounts = TestAccounts;
+    }
+    // No `#[derive(Bundle)]` on this test struct, so provide the build-time
+    // resolve hook by hand: no Lazy fields, nothing to resolve.
+    impl crate::Resolvable for TestBundle {
+        fn resolve_all(&mut self, _ctx: &crate::AnchorContext) {}
     }
 
     fn fresh_ctx() -> AnchorContext {

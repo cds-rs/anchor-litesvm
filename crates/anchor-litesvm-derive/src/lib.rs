@@ -1,16 +1,19 @@
-//! Proc-macro derives for anchor-litesvm.
-//!
-//! Two macros, both re-exported from `anchor_litesvm`:
+//! Proc-macro derives for anchor-litesvm, all re-exported from
+//! `anchor_litesvm`:
 //!
 //! - [`BundledPubkeys`] on a `#[derive(Accounts)]` struct emits
 //!   `From<Bundle> for accounts::*` and
 //!   `BuildableIx<Bundle> for instruction::*`. Lets tests collapse the
 //!   per-ix `.accounts(...).args(...).instruction()` chain into a single
-//!   `ctx.program().build_ix(bundle, args)` call.
+//!   `ctx.program().build_ix(bundle, args)` call. Design:
+//!   `docs/design/bundled-pubkeys.md`.
 //! - [`Bundle`] on a `Pubkey`-only struct emits a `Default` impl that
 //!   fills every field with `Pubkey::new_unique()` so the bundle is
 //!   ready to populate from test setup without spelling out each
 //!   placeholder.
+//! - [`BundleFrom`] projects a bundle from multiple source structs.
+//! - [`AliasMirror`] wires a struct's fields into the `Aliases` table so
+//!   rendered output reads in the test's own vocabulary.
 
 mod alias_mirror;
 mod bundle_from;
@@ -47,6 +50,14 @@ use syn::{parse_macro_input, DeriveInput};
 /// Accounts struct's name (e.g. `fn initialize_poll` paired with
 /// `struct InitPoll`, where Anchor names `instruction::InitializePoll`
 /// from the handler, not the struct).
+///
+/// **`#[bundle(unwrap)]` / `#[bundle(wrap_some)]`** are optional per-field
+/// attributes for shape fixups, used when one bundle is shared across
+/// accounts structs that disagree on a field's optionality. `unwrap`
+/// projects an `Option<T>` bundle field into a bare `T` account field
+/// (`b.field.expect(...)`, panicking with a pointed message if `None`);
+/// `wrap_some` does the reverse (`Some(b.field)`). Without them, a
+/// type mismatch between bundle and accounts field is a compile error.
 ///
 /// # Example
 ///
@@ -124,10 +135,6 @@ use syn::{parse_macro_input, DeriveInput};
 ///
 /// - `crates/anchor-litesvm/src/buildable.rs`: the `BuildableIx` trait
 ///   the derive plugs into.
-/// - `docs/adr/0001-bundledpubkeys-instruction-override.md`: rationale
-///   for the `instruction =` / `accounts =` overrides + diagnostic
-///   choices.
-/// - `EVALUATING.md`: end-to-end integration walkthrough.
 #[proc_macro_derive(BundledPubkeys, attributes(bundled_with, bundle))]
 pub fn derive_bundled_pubkeys(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -138,7 +145,7 @@ pub fn derive_bundled_pubkeys(input: TokenStream) -> TokenStream {
 }
 
 /// Emit `impl Default` for a struct of `Pubkey` fields, filling every
-/// field with [`Pubkey::new_unique()`](anchor_lang::prelude::Pubkey::new_unique).
+/// field with `Pubkey::new_unique()`.
 ///
 /// Pubkey bundles in tests want valid-looking placeholders for fields
 /// the test hasn't bound yet (so `struct update` syntax can fill in the
@@ -197,7 +204,9 @@ pub fn derive_bundled_pubkeys(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(Bundle)]
 pub fn derive_bundle(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    emit::emit_bundle_default(&input).into()
+    let default = emit::emit_bundle_default(&input);
+    let resolvable = emit::emit_bundle_resolvable(&input);
+    quote::quote! { #default #resolvable }.into()
 }
 
 /// Emit `From<(&T1, &T2, ...)> for Self` for a `Bundle` struct whose

@@ -204,9 +204,7 @@ fn extract_bundle_attr(field: &syn::Field) -> Result<Option<FieldSource>> {
         let arg: syn::Ident = attr.parse_args().map_err(|e| {
             Error::new(
                 attr.span(),
-                format!(
-                    "#[bundle(...)] expects a bare keyword like `unwrap` or `wrap_some`: {e}"
-                ),
+                format!("#[bundle(...)] expects a bare keyword like `unwrap` or `wrap_some`: {e}"),
             )
         })?;
         let mode = match arg.to_string().as_str() {
@@ -215,9 +213,7 @@ fn extract_bundle_attr(field: &syn::Field) -> Result<Option<FieldSource>> {
             other => {
                 return Err(Error::new(
                     arg.span(),
-                    format!(
-                        "unknown `#[bundle({other})]`; expected `unwrap` (Option<T> bundle field -> T target) or `wrap_some` (T bundle field -> Option<T> target)"
-                    ),
+                    format!("unknown `#[bundle({other})]`; expected `unwrap` (Option<T> bundle field -> T target) or `wrap_some` (T bundle field -> Option<T> target)"),
                 ))
             }
         };
@@ -350,7 +346,7 @@ mod tests {
                 assert!(render(ts).contains("system_program"));
                 assert!(render(ts).contains("ID"));
             }
-            _ => panic!("expected Const for Program<System>"),
+            other => panic!("expected Const for Program<System>, got {other:?}"),
         }
     }
 

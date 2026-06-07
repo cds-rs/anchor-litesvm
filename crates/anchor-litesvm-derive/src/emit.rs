@@ -50,7 +50,7 @@ fn emit_from_impl(spec: &Spec) -> TokenStream {
         let name = &f.name;
         match &f.source {
             FieldSource::Const(expr) => quote!(#name: #expr),
-            FieldSource::Project => quote!(#name: b.#name),
+            FieldSource::Project => quote!(#name: ::core::convert::Into::into(b.#name)),
             FieldSource::ProjectUnwrap => {
                 let field_str = name.to_string();
                 let msg = format!(
@@ -107,7 +107,7 @@ pub fn emit_bundle_default(input: &syn::DeriveInput) -> TokenStream {
     };
     let assignments = named.named.iter().map(|f| {
         let name = f.ident.as_ref().expect("named");
-        quote! { #name: ::anchor_lang::prelude::Pubkey::new_unique() }
+        quote! { #name: ::anchor_litesvm::BundleDefault::bundle_default() }
     });
     quote! {
         impl ::core::default::Default for #name {
@@ -115,6 +115,33 @@ pub fn emit_bundle_default(input: &syn::DeriveInput) -> TokenStream {
                 Self {
                     #(#assignments,)*
                 }
+            }
+        }
+    }
+}
+
+/// Emit `impl Resolvable for Bundle`: call `resolve_field` on every field, so
+/// `Lazy` fields resolve against the SVM and `Pubkey` fields are a no-op. Build
+/// runs this before projecting the bundle onto account metas.
+pub fn emit_bundle_resolvable(input: &syn::DeriveInput) -> TokenStream {
+    use syn::spanned::Spanned;
+    let name = &input.ident;
+    let syn::Data::Struct(data) = &input.data else {
+        return syn::Error::new(input.span(), "#[derive(Bundle)] only supports structs")
+            .to_compile_error();
+    };
+    let syn::Fields::Named(named) = &data.fields else {
+        return syn::Error::new(data.fields.span(), "#[derive(Bundle)] requires named fields")
+            .to_compile_error();
+    };
+    let calls = named.named.iter().map(|f| {
+        let fname = f.ident.as_ref().expect("named");
+        quote! { ::anchor_litesvm::ResolveField::resolve_field(&mut self.#fname, ctx); }
+    });
+    quote! {
+        impl ::anchor_litesvm::Resolvable for #name {
+            fn resolve_all(&mut self, ctx: &::anchor_litesvm::AnchorContext) {
+                #(#calls)*
             }
         }
     }

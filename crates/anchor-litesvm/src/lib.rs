@@ -220,6 +220,7 @@ pub mod builder;
 pub mod context;
 pub mod events;
 pub mod instruction;
+pub mod lazy;
 pub mod program;
 pub mod tx;
 
@@ -231,6 +232,7 @@ pub use builder::{AnchorLiteSVM, ProgramTestExt};
 pub use context::AnchorContext;
 pub use events::{parse_event_data, EventError, EventHelpers};
 pub use instruction::{build_anchor_instruction, calculate_anchor_discriminator};
+pub use lazy::{BundleDefault, Lazy, Resolvable, Resolve, ResolveField};
 pub use program::{InstructionBuilder, Program};
 pub use tx::Tx;
 
