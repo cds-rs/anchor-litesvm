@@ -2,13 +2,14 @@ use crate::account::AccountError;
 use crate::program::Program;
 use anchor_lang::AccountDeserialize;
 use litesvm::LiteSVM;
-use litesvm_utils::TransactionResult;
-use solana_hash::Hash;
-use solana_keypair::Keypair;
+use litesvm_utils::{Aliases, InstructionInfo, TransactionHelpers, TransactionResult};
+use solana_sdk::hash::Hash;
+use solana_sdk::signer::keypair::Keypair;
+use solana_program::instruction::Instruction;
 use solana_program::pubkey::Pubkey;
-use solana_signature::Signature;
-use solana_signer::Signer;
-use solana_transaction::Transaction;
+use solana_sdk::signature::Signature;
+use solana_sdk::signer::Signer;
+use solana_sdk::transaction::Transaction;
 
 /// Production-compatible testing context for Anchor programs.
 ///
@@ -19,6 +20,13 @@ pub struct AnchorContext {
     pub svm: LiteSVM,
     /// The Anchor program ID
     pub program_id: Pubkey,
+    /// Pubkey-to-friendly-name table used by the context-level
+    /// [`send_ok`](Self::send_ok) / [`send_err`](Self::send_err) /
+    /// [`send_err_named`](Self::send_err_named) helpers and stashed on
+    /// returned [`TransactionResult`]s so chained
+    /// `print_logs_structured()` calls read it implicitly. Extend via
+    /// [`alias`](Self::alias).
+    pub aliases: Aliases,
     /// The payer keypair
     payer: Keypair,
     /// The program instance for instruction building
@@ -51,6 +59,7 @@ impl AnchorContext {
         Self {
             svm,
             program_id,
+            aliases: Aliases::default(),
             payer,
             program,
         }
@@ -63,6 +72,7 @@ impl AnchorContext {
         Self {
             svm,
             program_id,
+            aliases: Aliases::default(),
             payer,
             program,
         }
@@ -86,6 +96,69 @@ impl AnchorContext {
     /// Get the payer keypair
     pub fn payer(&self) -> &Keypair {
         &self.payer
+    }
+
+    /// Register `pubkey -> label` in the context's alias table. Later
+    /// inserts shadow earlier ones, so this also serves as a rename when
+    /// an actor's role changes mid-test (e.g. authority rotation).
+    pub fn alias(&mut self, pubkey: Pubkey, label: impl Into<String>) -> &mut Self {
+        self.aliases.add(pubkey, label);
+        self
+    }
+
+    /// Resolve `pubkey` to its registered alias, or a short `<8>…<4>` form
+    /// when it isn't aliased. Shorthand for `self.aliases.label(&pubkey)`.
+    ///
+    /// Built for report rows: alias the accounts a scenario names (actors,
+    /// PDAs), then drop `ctx.label(&pk)` straight into a
+    /// [`md_table!`](crate::md_table) / [`md_kv!`](crate::md_kv) cell instead
+    /// of hand-rolling a pubkey-to-name match.
+    pub fn label(&self, pubkey: &Pubkey) -> String {
+        self.aliases.label(pubkey)
+    }
+
+    /// Start a fluent [`Tx`](crate::tx::Tx) chain: build + send +
+    /// expect in one statement, with the success and negative paths
+    /// sharing every step up to the terminator. Replaces the per-verb
+    /// `_ok`/`_expecting` pair that hand-rolled helpers tend to grow.
+    ///
+    /// ```ignore
+    /// ctx.tx(&[&signer])
+    ///    .build(SwapBundle::from((&pool, &user)), instruction::Swap { kind, dir })
+    ///    .send_ok()
+    ///    .print_logs_structured();
+    /// ```
+    pub fn tx<'a>(&'a mut self, signers: &'a [&'a Keypair]) -> crate::tx::Tx<'a> {
+        crate::tx::Tx::new(self, signers)
+    }
+
+    /// Send an ix expected to succeed, with structured-log aliases drawn
+    /// from `self.aliases`. Returned [`TransactionResult`] carries the
+    /// aliases internally, so `.print_logs_structured()` works with no
+    /// argument. Thin wrapper over
+    /// [`TransactionHelpers::send_ok`](litesvm_utils::TransactionHelpers::send_ok)
+    /// that removes the per-call `&Aliases` thread.
+    pub fn send_ok(&mut self, ix: Instruction, signers: &[&Keypair]) -> TransactionResult {
+        self.svm.send_ok(ix, signers, &self.aliases)
+    }
+
+    /// Send an ix expected to fail (any error). Aliases drawn from
+    /// `self.aliases`. Companion to [`send_ok`](Self::send_ok).
+    pub fn send_err(&mut self, ix: Instruction, signers: &[&Keypair]) -> TransactionResult {
+        self.svm.send_err(ix, signers, &self.aliases)
+    }
+
+    /// Send an ix expected to fail with `error_name` (substring matched
+    /// against logs and the error field). Aliases drawn from
+    /// `self.aliases`. Companion to [`send_ok`](Self::send_ok).
+    pub fn send_err_named(
+        &mut self,
+        ix: Instruction,
+        signers: &[&Keypair],
+        error_name: &str,
+    ) -> TransactionResult {
+        self.svm
+            .send_err_named(ix, signers, &self.aliases, error_name)
     }
 
     /// Execute a single instruction using LiteSVM
@@ -114,24 +187,27 @@ impl AnchorContext {
             self.payer.pubkey()
         };
 
+        // Capture the ix info for the structured-logs header before the
+        // transaction below borrows `instruction`. `from_instruction`
+        // clones only the data bytes, which is what we need anyway.
+        let info = InstructionInfo::from_instruction(&instruction);
         // Build and sign the transaction
         let tx = Transaction::new_signed_with_payer(
-            &[instruction.clone()],
+            std::slice::from_ref(&instruction),
             Some(&payer_pubkey),
             signers,
             self.svm.latest_blockhash(),
         );
+        let message = tx.message.clone();
 
         // Execute the transaction
         match self.svm.send_transaction(tx) {
-            Ok(result) => Ok(TransactionResult::new(
-                result,
-                Some(format!("instruction to {}", instruction.program_id)),
-            )),
+            Ok(result) => Ok(TransactionResult::new(result, Some(info), message)),
             Err(failed) => Ok(TransactionResult::new_failed(
                 format!("{:?}", failed.err),
                 failed.meta,
-                Some(format!("instruction to {}", instruction.program_id)),
+                Some(info),
+                message,
             )),
         }
     }
@@ -156,17 +232,16 @@ impl AnchorContext {
             signers,
             self.svm.latest_blockhash(),
         );
+        let message = tx.message.clone();
 
         // Execute the transaction
         match self.svm.send_transaction(tx) {
-            Ok(result) => Ok(TransactionResult::new(
-                result,
-                Some("batch transaction".to_string()),
-            )),
+            Ok(result) => Ok(TransactionResult::new(result, None, message)),
             Err(failed) => Ok(TransactionResult::new_failed(
                 format!("{:?}", failed.err),
                 failed.meta,
-                Some("batch transaction".to_string()),
+                None,
+                message,
             )),
         }
     }
@@ -241,6 +316,39 @@ impl AnchorContext {
         let mut data = account_data.data.as_slice();
         T::try_deserialize_unchecked(&mut data)
             .map_err(|e| AccountError::DeserializationError(e.to_string()))
+    }
+
+    /// Load an Anchor account, panicking on failure.
+    ///
+    /// Test-oriented sibling of [`get_account`](Self::get_account): the same fetch
+    /// and deserialization, but failures (missing account, wrong discriminator,
+    /// deser error) panic with the address and underlying [`AccountError`] in the
+    /// message instead of returning a `Result`. Use in tests where a missing or
+    /// malformed account is itself a test failure.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let escrow: Escrow = ctx.load(&accs.escrow);
+    /// assert_eq!(escrow.expiry_utc, Some(expiry));
+    /// ```
+    pub fn load<T>(&self, address: &Pubkey) -> T
+    where
+        T: AccountDeserialize,
+    {
+        self.get_account(address)
+            .unwrap_or_else(|e| panic!("failed to load account at {address}: {e}"))
+    }
+
+    /// Load an Anchor account without discriminator check, panicking on failure.
+    ///
+    /// Test-oriented sibling of [`get_account_unchecked`](Self::get_account_unchecked).
+    /// Same panic semantics as [`load`](Self::load).
+    pub fn load_unchecked<T>(&self, address: &Pubkey) -> T
+    where
+        T: AccountDeserialize,
+    {
+        self.get_account_unchecked(address)
+            .unwrap_or_else(|e| panic!("failed to load account at {address}: {e}"))
     }
 
     /// Create a funded account (convenience method)

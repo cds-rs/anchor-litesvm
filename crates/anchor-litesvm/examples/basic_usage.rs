@@ -1,6 +1,6 @@
 use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, TestHelpers};
 use solana_program::pubkey::Pubkey;
-use solana_signer::Signer;
+use solana_sdk::signer::Signer;
 
 fn main() {
     println!("anchor-litesvm basic_usage");
@@ -10,7 +10,7 @@ fn main() {
 
 #[allow(dead_code)]
 fn compile_only_example() {
-    let mut ctx = AnchorLiteSVM::build_with_program(Pubkey::new_unique(), &[]);
+    let mut ctx = AnchorLiteSVM::build_with_program(Pubkey::new_unique(), "example", &[]);
     let payer = ctx.svm.create_funded_account(10_000_000_000).unwrap();
     let mint = ctx.svm.create_token_mint(&payer, 9).unwrap();
     let ata = ctx

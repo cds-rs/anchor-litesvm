@@ -1,25 +1,21 @@
 [package]
 name = "anchor-litesvm"
-version = "0.4.0"
+version = "0.4.0-anchor-0.31"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 readme = "README.md"
-description = "Simplified Anchor testing with LiteSVM - similar syntax to anchor-client, 78% less code"
+description = "[LTS / anchor 0.31 compat] Simplified Anchor testing with LiteSVM. Frozen branch for the mpl-core community; bug-fixes only. See MIGRATING.md."
 documentation = "https://docs.rs/anchor-litesvm"
 keywords = ["solana", "anchor", "litesvm", "testing", "blockchain"]
 
 [dependencies]
-litesvm-utils = { version = "0.4.0", path = "../litesvm-utils" }
+litesvm-utils = { version = "0.4.0-anchor-0.31", path = "../litesvm-utils" }
+anchor-litesvm-derive = { version = "0.4.0-anchor-0.31", path = "../anchor-litesvm-derive" }
 litesvm = { workspace = true }
 anchor-lang = { workspace = true }
+solana-sdk = { workspace = true }
 solana-program = { workspace = true }
-solana-account = "3.4.0"
-solana-hash = "3.1.0"
-solana-keypair = "3.1.2"
-solana-signature = "3.4.0"
-solana-signer = "3.0.0"
-solana-transaction = { version = "3.0.1", features = ["bincode"] }
 spl-token = { workspace = true }
 spl-associated-token-account = { workspace = true }
 borsh = { workspace = true }

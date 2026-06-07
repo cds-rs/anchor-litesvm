@@ -49,7 +49,7 @@ pub fn calculate_anchor_discriminator(instruction_name: &str) -> [u8; 8] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use borsh::BorshSerialize;
+    use anchor_lang::AnchorSerialize;
 
     #[test]
     fn test_discriminator_calculation() {
@@ -68,10 +68,17 @@ mod tests {
 
     #[test]
     fn test_instruction_building() {
-        // In anchor 1.0.0, AnchorSerialize is an alias for BorshSerialize
-        #[derive(BorshSerialize)]
+        // Hand-roll instead of `#[derive(AnchorSerialize)]`: anchor 0.31's
+        // derive expands to `::borsh::maybestd::*` (borsh 0.10), and the
+        // workspace deps surface a newer borsh that doesn't have that
+        // path, so the derive doesn't resolve here.
         struct TestArgs {
             value: u64,
+        }
+        impl AnchorSerialize for TestArgs {
+            fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+                writer.write_all(&self.value.to_le_bytes())
+            }
         }
 
         let program_id = Pubkey::new_unique();
