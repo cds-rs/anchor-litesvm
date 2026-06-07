@@ -330,10 +330,10 @@ assert!(error_string.contains("InsufficientFunds"));
 ```rust
 let result = ctx.execute_instruction(ix, &[&payer])?;
 result.assert_failure();
+// assert_error does substring match in logs OR error field; covers
+// both runtime errors and Anchor #[error_code] names.
 result.assert_error("InsufficientFunds");
-
-// Or for Anchor errors
-result.assert_anchor_error("InsufficientFunds");
+// Or by Anchor custom error code:
 result.assert_error_code(6000);
 ```
 

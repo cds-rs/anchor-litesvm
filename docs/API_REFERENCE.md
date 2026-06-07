@@ -678,20 +678,23 @@ result.assert_failure();
 
 ### `assert_error()`
 
-Assert transaction failed with specific error message.
+Assert transaction failed and the substring appears in logs OR the
+error field. Covers both runtime errors (which surface in the error
+field) and Anchor `#[error_code]` names (which surface in logs).
 
 ```rust
-pub fn assert_error(&self, expected_error: &str) -> &Self
+pub fn assert_error(self, expected_error: &str) -> Self
 ```
 
 **Parameters:**
 - `expected_error`: Expected error substring
 
-**Panics:** If transaction succeeded or error doesn't match
+**Panics:** If transaction succeeded or substring not found in either source
 
 **Example:**
 ```rust
-result.assert_error("insufficient funds");
+result.assert_error("EscrowExpired");           // Anchor error name (in logs)
+result.assert_error("InsufficientFundsForRent"); // Runtime error (in the error field)
 ```
 
 ---
@@ -712,46 +715,6 @@ pub fn assert_error_code(&self, error_code: u32) -> &Self
 **Example:**
 ```rust
 result.assert_error_code(6000); // Custom error code
-```
-
----
-
-### `assert_anchor_error()`
-
-Assert transaction failed with named Anchor error.
-
-```rust
-pub fn assert_anchor_error(&self, error_name: &str) -> &Self
-```
-
-**Parameters:**
-- `error_name`: Expected Anchor error name
-
-**Panics:** If transaction succeeded or error not found
-
-**Example:**
-```rust
-result.assert_anchor_error("InsufficientFunds");
-```
-
----
-
-### `assert_log_error()`
-
-Assert error message appears in logs.
-
-```rust
-pub fn assert_log_error(&self, error_message: &str) -> &Self
-```
-
-**Parameters:**
-- `error_message`: Expected error message
-
-**Panics:** If message not found in logs
-
-**Example:**
-```rust
-result.assert_log_error("Transfer amount exceeds balance");
 ```
 
 ---

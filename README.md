@@ -1,5 +1,18 @@
 # anchor-litesvm Workspace
 
+> ⚠ **You are on the `compat/anchor-0.31` LTS branch.**
+>
+> This branch exists **solely** to support projects that depend on
+> `mpl-core`'s `anchor` feature (still pinned to `anchor-lang = "0.31.1"`
+> upstream). It is **bug-fixes only** — no forward features will be
+> backported. The branch will be **deprecated and archived** as soon as
+> upstream mpl-core ships an `anchor-lang = "1.0"` release.
+>
+> If you are *not* using mpl-core, use [`main`](../../tree/main) instead.
+>
+> See [`MIGRATING.md`](./MIGRATING.md) for the differences and the
+> migration path back to `main`.
+
 **Two powerful crates for Solana program testing with LiteSVM**
 
 | Crate | Description | crates.io | docs.rs |
@@ -71,6 +84,7 @@ fn test_my_program() {
     // One-line setup
     let mut ctx = AnchorLiteSVM::build_with_program(
         my_program::ID,
+        "my_program",
         include_bytes!("../target/deploy/my_program.so"),
     );
 
