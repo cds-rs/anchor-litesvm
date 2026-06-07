@@ -2,6 +2,7 @@
 members = [
     "crates/litesvm-utils",
     "crates/anchor-litesvm",
+    "crates/anchor-litesvm-derive",
 ]
 resolver = "2"
 
@@ -11,18 +12,29 @@ license = "MIT"
 repository = "https://github.com/brimigs/anchor-litesvm"
 keywords = ["solana", "anchor", "litesvm", "testing", "blockchain"]
 
+# ============================================================================
+# compat/anchor-0.31 LTS BRANCH
+# ----------------------------------------------------------------------------
+# This branch exists solely to support the mpl-core community, which is still
+# pinned to anchor-lang 0.31. It is bug-fixes-only and will be deprecated once
+# upstream mpl-core ships an anchor-lang 1.0 release. See MIGRATING.md.
+#
+# Deps are pinned with `=` so the lockfile stays reproducible against the
+# narrow anchor 0.31 / solana 2.x ecosystem. Do not relax to `^` here.
+# ============================================================================
 [workspace.dependencies]
-litesvm = "0.11.0"
-litesvm-token = "0.11.0"
-anchor-lang = "1.0.0"
-solana-program = "3.0.0"
-solana-program-pack = "3.1.0"
-solana-keypair = "3.1.2"
-solana-signer = "3.0.0"
-solana-transaction = { version = "3.0.1", features = ["bincode"] }
+litesvm = "=0.6.1"
+anchor-lang = "=0.31.1"
+anchor-spl = "=0.31.1"
+solana-sdk = "=2.2.1"
+solana-program = "=2.2.1"
+solana-program-pack = "=2.2.1"
 borsh = "1.5.3"
 sha2 = "0.10.8"
-thiserror = "2.0.18"
-spl-token = "9.0.0"
-spl-associated-token-account = "8.0.0"
-solana-system-interface = { version = "2.0.0", features = ["bincode"] }
+thiserror = "1.0"
+spl-token = { version = "=7.0.0", features = ["no-entrypoint"] }
+spl-associated-token-account = { version = "=6.0.0", features = ["no-entrypoint"] }
+syn = { version = "2", features = ["full", "extra-traits"] }
+quote = "1"
+proc-macro2 = "1"
+trybuild = "1"
