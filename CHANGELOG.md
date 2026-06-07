@@ -7,7 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-No unreleased changes yet.
+### Added
+
+- `Report::expect_panic(reason)` (litesvm-utils): declare a scenario as a
+  parked TDD red spec, expected to abort. Pairs with `#[should_panic]`: the
+  attribute keeps `cargo test` green while the spec is parked, the marker keeps
+  the report honest (`RED (expected)` + the reason, instead of `PASS`).
+
+### Changed
+
+- Mermaid sequence diagrams (litesvm-utils) no longer wrap failures in tinted
+  `rect` regions and no longer carry compute units on arrow labels. The `✗`
+  notes (Plain) and `--x` arrows (Lifelines) are the failure markers; CU and
+  full error context stay in the structured tree. Reviewer feedback: the
+  regions read as "everything in here is broken" when the root cause is one
+  edge, and CU labels compete with the error for attention.
+
+### Fixed
+
+- A `Report` whose test panics mid-flight no longer renders `PASS`: an
+  undeclared abort renders `ABORTED`, and the report notes that it stops at the
+  last recorded event. Previously the status reflected only soft checks, so a
+  test that died after a few passing checks read as `PASS`.
 
 ## [anchor-litesvm 0.4.0] - 2026-04-09
 
