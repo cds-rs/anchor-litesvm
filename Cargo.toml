@@ -9,7 +9,7 @@ resolver = "2"
 [workspace.package]
 edition = "2021"
 license = "MIT"
-repository = "https://github.com/brimigs/anchor-litesvm"
+repository = "https://github.com/cds-rs/anchor-litesvm"
 keywords = ["solana", "anchor", "litesvm", "testing", "blockchain"]
 
 # ============================================================================

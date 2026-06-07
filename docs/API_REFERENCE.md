@@ -1148,4 +1148,4 @@ fn test_complete_workflow() {
 - [Quick Start Guide](QUICK_START.md) - Get started in 5 minutes
 - [Migration Guide](MIGRATION.md) - Migrate from raw LiteSVM
 - [Examples](../examples/) - Runnable code examples
-- [GitHub Repository](https://github.com/brimigs/anchor-litesvm)
+- [GitHub Repository](https://github.com/cds-rs/anchor-litesvm)

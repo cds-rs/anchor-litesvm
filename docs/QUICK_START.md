@@ -513,7 +513,7 @@ let accounts = vec![
 
 ## Getting Help
 
-- **GitHub Issues**: https://github.com/brimigs/anchor-litesvm/issues
+- **GitHub Issues**: https://github.com/cds-rs/anchor-litesvm/issues
 - **Examples**: See `examples/` directory
 - **Tests**: See [anchor-escrow-with-litesvm](https://github.com/brimigs/anchor-escrow-with-litesvm) for real-world usage
 

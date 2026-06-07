@@ -200,10 +200,10 @@
 //!
 //! ## Documentation
 //!
-//! - [Quick Start Guide](https://github.com/brimigs/anchor-litesvm/blob/main/docs/QUICK_START.md)
-//! - [API Reference](https://github.com/brimigs/anchor-litesvm/blob/main/docs/API_REFERENCE.md)
-//! - [Migration Guide](https://github.com/brimigs/anchor-litesvm/blob/main/docs/MIGRATION.md)
-//! - [Examples](https://github.com/brimigs/anchor-litesvm/tree/main/examples)
+//! - [Quick Start Guide](https://github.com/cds-rs/anchor-litesvm/blob/compat/anchor-0.31/docs/QUICK_START.md)
+//! - [API Reference](https://github.com/cds-rs/anchor-litesvm/blob/compat/anchor-0.31/docs/API_REFERENCE.md)
+//! - [Migration Guide](https://github.com/cds-rs/anchor-litesvm/blob/compat/anchor-0.31/docs/MIGRATION.md)
+//! - [Examples](https://github.com/cds-rs/anchor-litesvm/tree/compat/anchor-0.31/examples)
 //!
 //! ## Modules
 //!
