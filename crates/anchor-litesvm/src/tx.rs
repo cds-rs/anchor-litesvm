@@ -152,7 +152,6 @@ mod tests {
     use solana_program::instruction::AccountMeta;
     use solana_program::pubkey::Pubkey;
     use solana_sdk::signer::keypair::Keypair;
-    use solana_sdk::signer::Signer;
 
     // A trivial test ix that doesn't need the SVM to execute — these
     // tests verify the builder's plumbing (ix construction, signer
