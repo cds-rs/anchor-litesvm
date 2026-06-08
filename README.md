@@ -191,7 +191,7 @@ scrutinizing.
 
 Tried it on your program? Open a [**Dogfood feedback**](https://github.com/cds-rs/anchor-litesvm/issues/new/choose)
 issue (it lands under the `🐶 dogfood` label) and tell us what helped and what got in
-your way. The full call is in [docs/dogfooding-call.md](docs/dogfooding-call.md).
+your way. The [dogfooding call](https://github.com/cds-rs/anchor-litesvm/issues/3) has the full rundown.
 
 ## Testing
 
