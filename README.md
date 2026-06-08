@@ -169,6 +169,24 @@ cargo run -p anchor-litesvm --example advanced_features
 cargo run -p litesvm-utils --example fabricate_nft
 ```
 
+## Example programs
+
+Full programs tested with these crates, each pinned to the branch matching its
+Anchor version:
+
+| Program | Branch (Anchor) | What it shows |
+|---------|-----------------|---------------|
+| [`cds-turbin3/builder-03-nft-stake`](https://github.com/cds-turbin3/builder-03-nft-stake) | `compat/anchor-0.31` (0.31) | mpl-core NFT staking on this branch: the framework against a real Metaplex consumer. |
+| [`cds-turbin3/builder-01-vault`](https://github.com/cds-turbin3/builder-01-vault) | `turbin3` (1.0) | Vault deposit / withdraw. |
+| [`cds-turbin3/builder-01-escrow`](https://github.com/cds-turbin3/builder-01-escrow) | `turbin3` (1.0) | Escrow make / take / refund. |
+| [`cds-turbin3/builder-02-amm`](https://github.com/cds-turbin3/builder-02-amm) | `turbin3` (1.0) | A constant-product AMM. |
+| [`cds-rs/anchor-escrow-with-litesvm`](https://github.com/cds-rs/anchor-escrow-with-litesvm) | `turbin3` (1.0) | Escrow migrated to the bundle API; a generated `TESTRUN.md` with authority / ownership / sequence diagrams. |
+
+The `compat/anchor-0.31` consumer is **builder-03-nft-stake** (mpl-core pins anchor
+0.31); the others target the `turbin3` branch (anchor 1.0). Each commits a
+deterministic test report, so a diff in that report is a behavior change worth
+scrutinizing.
+
 ## Testing
 
 ```bash
