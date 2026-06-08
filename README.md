@@ -187,6 +187,12 @@ The `compat/anchor-0.31` consumer is **builder-03-nft-stake** (mpl-core pins anc
 deterministic test report, so a diff in that report is a behavior change worth
 scrutinizing.
 
+## Feedback
+
+Tried it on your program? Open a [**Dogfood feedback**](https://github.com/cds-rs/anchor-litesvm/issues/new/choose)
+issue (it lands under the `🐶 dogfood` label) and tell us what helped and what got in
+your way. The full call is in [docs/dogfooding-call.md](docs/dogfooding-call.md).
+
 ## Testing
 
 ```bash
