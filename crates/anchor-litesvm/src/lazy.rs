@@ -107,6 +107,24 @@ impl<D> BundleDefault for Lazy<D> {
     }
 }
 
+/// `Option<T>` is a first-class bundle field shape (the `unwrap`/`wrap_some`
+/// projections exist precisely for it), so the `Bundle` derive must handle
+/// it: resolution delegates to the inner value when present, and the
+/// placeholder default is `None` (the "not set yet" the projections check).
+impl<T: ResolveField> ResolveField for Option<T> {
+    fn resolve_field(&mut self, ctx: &AnchorContext) {
+        if let Some(inner) = self {
+            inner.resolve_field(ctx);
+        }
+    }
+}
+
+impl<T> BundleDefault for Option<T> {
+    fn bundle_default() -> Self {
+        None
+    }
+}
+
 impl<D> From<Pubkey> for Lazy<D> {
     fn from(pk: Pubkey) -> Self {
         Lazy::Ready(pk)
