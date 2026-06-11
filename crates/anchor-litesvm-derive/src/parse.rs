@@ -36,6 +36,9 @@ pub struct Spec {
     /// struct name by construction), but provided for symmetry with
     /// `instruction_path`.
     pub accounts_path: Option<syn::Path>,
+    /// The derive input's generics (the accounts struct's `<'info>`), needed
+    /// to emit inherent impls (e.g. `injected_programs()`) on the struct.
+    pub generics: syn::Generics,
     /// All fields, in declaration order.
     pub fields: Vec<Field>,
 }
@@ -45,6 +48,13 @@ pub struct Field {
     pub name: syn::Ident,
     /// Source-of-value for this field in the emitted `From` impl.
     pub source: FieldSource,
+    /// `Some("T")` when the field was classified by the structural rule
+    /// (`Program<'info, T>` injects `<T as Id>::id()`): the name feeds the
+    /// generated `injected_programs()` table, so injected programs name
+    /// themselves in renders. `None` for explicit `#[bundle(inject = ...)]`
+    /// (no type to name) and the `Interface` special case (the alias seed
+    /// list already names classic Token).
+    pub injected_name: Option<String>,
 }
 
 #[derive(Debug)]
@@ -76,6 +86,7 @@ pub fn parse(input: DeriveInput) -> Result<Spec> {
         bundle_path,
         instruction_path,
         accounts_path,
+        generics: input.generics.clone(),
         fields,
     })
 }
@@ -183,37 +194,50 @@ fn extract_fields(input: &DeriveInput) -> Result<Vec<Field>> {
         // would normally be `Project` or `Const`). The attribute is the
         // user's explicit request to coerce shapes between the bundle
         // and the target accounts field; if they wrote it, honour it.
-        let source = match extract_bundle_attr(field)? {
-            Some(s) => s,
+        let (source, injected_name) = match extract_bundle_attr(field)? {
+            Some(s) => (s, None),
             None => classify_field_type(&field.ty),
         };
-        fields.push(Field { name, source });
+        fields.push(Field {
+            name,
+            source,
+            injected_name,
+        });
     }
     Ok(fields)
 }
 
-/// Parse `#[bundle(unwrap)]` / `#[bundle(wrap_some)]` on a field, if
-/// present. Returns `Ok(None)` when the attribute is absent. Duplicate
-/// `#[bundle(...)]` attributes on the same field are an error.
+/// Parse `#[bundle(unwrap)]` / `#[bundle(wrap_some)]` /
+/// `#[bundle(inject = expr)]` on a field, if present. Returns `Ok(None)`
+/// when the attribute is absent. Duplicate `#[bundle(...)]` attributes on
+/// the same field are an error. An explicit attribute always beats the
+/// structural classification.
 fn extract_bundle_attr(field: &syn::Field) -> Result<Option<FieldSource>> {
     let mut found: Option<FieldSource> = None;
     for attr in &field.attrs {
         if !attr.path().is_ident("bundle") {
             continue;
         }
-        let arg: syn::Ident = attr.parse_args().map_err(|e| {
+        let meta: syn::Meta = attr.parse_args().map_err(|e| {
             Error::new(
                 attr.span(),
-                format!("#[bundle(...)] expects a bare keyword like `unwrap` or `wrap_some`: {e}"),
+                format!("#[bundle(...)] expects `unwrap`, `wrap_some`, or `inject = <expr>`: {e}"),
             )
         })?;
-        let mode = match arg.to_string().as_str() {
-            "unwrap" => FieldSource::ProjectUnwrap,
-            "wrap_some" => FieldSource::ProjectWrapSome,
+        let mode = match &meta {
+            syn::Meta::Path(p) if p.is_ident("unwrap") => FieldSource::ProjectUnwrap,
+            syn::Meta::Path(p) if p.is_ident("wrap_some") => FieldSource::ProjectWrapSome,
+            syn::Meta::NameValue(nv) if nv.path.is_ident("inject") => {
+                let expr = &nv.value;
+                FieldSource::Const(quote::quote!(#expr))
+            }
             other => {
                 return Err(Error::new(
-                    arg.span(),
-                    format!("unknown `#[bundle({other})]`; expected `unwrap` (Option<T> bundle field -> T target) or `wrap_some` (T bundle field -> Option<T> target)"),
+                    attr.span(),
+                    format!(
+                        "unknown `#[bundle({})]`; expected `unwrap` (Option<T> bundle field -> T target), `wrap_some` (T bundle field -> Option<T> target), or `inject = <expr>` (projection becomes the expression; the field leaves the bundle)",
+                        quote::quote!(#other)
+                    ),
                 ))
             }
         };
@@ -228,25 +252,65 @@ fn extract_bundle_attr(field: &syn::Field) -> Result<Option<FieldSource>> {
     Ok(found)
 }
 
-/// Map well-known Anchor account types to canonical program IDs.
-/// Anything we don't recognise falls through to `FieldSource::Project`,
-/// which projects from the bundle struct.
-fn classify_field_type(ty: &syn::Type) -> FieldSource {
+/// Classify a field structurally instead of by table. The rule: a field of
+/// type `Program<'info, T>`, for any `T`, is well-known; its projection is
+/// `<T as anchor_lang::Id>::id()` (emitted with the type path exactly as the
+/// field declares it, so it resolves wherever the accounts struct compiles),
+/// and it never appears in the bundle. `System` and `AssociatedToken` are
+/// instances of the rule rather than special cases. The one remaining
+/// opinion is `Interface<'info, TokenInterface>`: `TokenInterface` has the
+/// plural `Ids` (classic Token and Token-2022), so there is no single `id()`
+/// to call; the derive keeps injecting classic `anchor_spl::token::ID`, and
+/// Token-2022 tests override via `build_with`, exactly as documented.
+/// Anything else falls through to `FieldSource::Project`.
+///
+/// The second tuple element is the injected program's display name (`"T"`),
+/// feeding the generated `injected_programs()` table; `None` where there is
+/// nothing structural to name.
+fn classify_field_type(ty: &syn::Type) -> (FieldSource, Option<String>) {
     use quote::quote;
-    let Some((head, inner)) = generic_inner(ty) else {
-        return FieldSource::Project;
+    let Some((head, inner_ty)) = generic_inner_type(ty) else {
+        return (FieldSource::Project, None);
     };
-    match (head.as_str(), inner.as_str()) {
-        ("Program", "System") => {
-            FieldSource::Const(quote!(anchor_lang::solana_program::system_program::ID))
+    let inner_name = match inner_ty {
+        syn::Type::Path(p) => p
+            .path
+            .segments
+            .last()
+            .map(|s| s.ident.to_string())
+            .unwrap_or_default(),
+        _ => return (FieldSource::Project, None),
+    };
+    match (head.as_str(), inner_name.as_str()) {
+        ("Interface", "TokenInterface") => {
+            (FieldSource::Const(quote!(anchor_spl::token::ID)), None)
         }
-        ("Program", "AssociatedToken") => {
-            FieldSource::Const(quote!(anchor_spl::associated_token::ID))
-        }
-        ("Interface", "TokenInterface") => FieldSource::Const(quote!(anchor_spl::token::ID)),
-        _ => FieldSource::Project,
+        ("Program", _) => (
+            FieldSource::Const(quote!(<#inner_ty as anchor_lang::Id>::id())),
+            Some(inner_name),
+        ),
+        _ => (FieldSource::Project, None),
     }
 }
+
+/// Pull `(Head, inner type)` out of `Head<'_, Inner>` or `Head<Inner>`,
+/// handing back the inner `syn::Type` itself, so
+/// the emitter can paste the type path exactly as the field declared it.
+fn generic_inner_type(ty: &syn::Type) -> Option<(String, &syn::Type)> {
+    let syn::Type::Path(tp) = ty else { return None };
+    let seg = tp.path.segments.last()?;
+    let head = seg.ident.to_string();
+    let syn::PathArguments::AngleBracketed(args) = &seg.arguments else {
+        return None;
+    };
+    for arg in &args.args {
+        if let syn::GenericArgument::Type(t) = arg {
+            return Some((head, t));
+        }
+    }
+    None
+}
+
 
 /// Pull `(Head, Inner)` out of `Head<'_, Inner>` or `Head<Inner>`. The
 /// match is purely textual on the last path segment, which is what we want:
@@ -343,11 +407,61 @@ mod tests {
         assert_eq!(spec.fields[1].name, "system_program");
         match &spec.fields[1].source {
             FieldSource::Const(ts) => {
-                assert!(render(ts).contains("system_program"));
-                assert!(render(ts).contains("ID"));
+                // System is an instance of the general rule now, not a table row.
+                let r = render(ts);
+                assert!(r.contains("System"), "{r}");
+                assert!(r.contains("Id"), "{r}");
             }
             other => panic!("expected Const for Program<System>, got {other:?}"),
         }
+        assert_eq!(spec.fields[1].injected_name.as_deref(), Some("System"));
+    }
+
+    #[test]
+    fn classifies_any_program_by_the_structural_rule() {
+        // The point of the rule: a type the old table never heard of.
+        let input: DeriveInput = parse_quote! {
+            #[bundled_with(B)]
+            struct Create<'info> {
+                pub payer: Signer<'info>,
+                pub mpl_core_program: Program<'info, MplCore>,
+            }
+        };
+        let spec = parse(input).expect("parse ok");
+        match &spec.fields[1].source {
+            FieldSource::Const(ts) => {
+                let r = render(ts);
+                assert!(r.contains("MplCore"), "{r}");
+                assert!(r.contains("anchor_lang :: Id") || r.contains("anchor_lang::Id"), "{r}");
+            }
+            other => panic!("expected Const for Program<MplCore>, got {other:?}"),
+        }
+        assert_eq!(spec.fields[1].injected_name.as_deref(), Some("MplCore"));
+    }
+
+    #[test]
+    fn inject_attribute_beats_the_rule_and_has_no_name() {
+        let input: DeriveInput = parse_quote! {
+            #[bundled_with(B)]
+            struct Create<'info> {
+                #[bundle(inject = mpl_core::ID)]
+                pub mpl_core_program: UncheckedAccount<'info>,
+                #[bundle(inject = anchor_spl::token_2022::ID)]
+                pub token_program: Program<'info, System>,
+            }
+        };
+        let spec = parse(input).expect("parse ok");
+        match &spec.fields[0].source {
+            FieldSource::Const(ts) => assert!(render(ts).contains("mpl_core")),
+            other => panic!("expected Const from inject, got {other:?}"),
+        }
+        assert_eq!(spec.fields[0].injected_name, None);
+        // Precedence: the explicit attribute wins over the structural rule.
+        match &spec.fields[1].source {
+            FieldSource::Const(ts) => assert!(render(ts).contains("token_2022")),
+            other => panic!("expected attr Const to beat the rule, got {other:?}"),
+        }
+        assert_eq!(spec.fields[1].injected_name, None);
     }
 
     #[test]
@@ -361,10 +475,14 @@ mod tests {
         let spec = parse(input).expect("parse ok");
         match &spec.fields[0].source {
             FieldSource::Const(ts) => {
-                assert!(render(ts).contains("associated_token"));
+                // An instance of the general rule now, not a table row.
+                let r = render(ts);
+                assert!(r.contains("AssociatedToken"), "{r}");
+                assert!(r.contains("Id"), "{r}");
             }
             _ => panic!("expected Const"),
         }
+        assert_eq!(spec.fields[0].injected_name.as_deref(), Some("AssociatedToken"));
     }
 
     #[test]

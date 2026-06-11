@@ -48,7 +48,17 @@ pub struct InterfaceAccount<'info, T>(::core::marker::PhantomData<&'info T>);
 pub struct Program<'info, T>(::core::marker::PhantomData<&'info T>);
 pub struct Interface<'info, T>(::core::marker::PhantomData<&'info T>);
 pub struct System;
+impl anchor_lang::Id for System {
+    fn id() -> Pubkey {
+        anchor_lang::solana_program::system_program::ID
+    }
+}
 pub struct AssociatedToken;
+impl anchor_lang::Id for AssociatedToken {
+    fn id() -> Pubkey {
+        anchor_spl::associated_token::ID
+    }
+}
 pub struct TokenInterface;
 pub struct Mint;
 

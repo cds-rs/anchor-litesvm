@@ -30,10 +30,20 @@ use syn::{parse_macro_input, DeriveInput};
 /// The derive emits two impls per Accounts struct it's attached to:
 ///
 /// - `impl From<Bundle> for crate::accounts::<StructName>` projects
-///   each field from the bundle, auto-injecting canonical program IDs
-///   for `Program<'_, System>`, `Program<'_, AssociatedToken>`, and
-///   `Interface<'_, TokenInterface>` so the bundle doesn't have to
-///   carry them.
+///   each field from the bundle, injecting program IDs by the STRUCTURAL
+///   RULE: any field of type `Program<'_, T>` injects `<T as
+///   anchor_lang::Id>::id()` (the type path exactly as the field declares
+///   it), so the bundle never carries it. `System` and `AssociatedToken`
+///   are instances of the rule, not special cases; the one remaining
+///   opinion is `Interface<'_, TokenInterface>` (plural `Ids`, so the
+///   derive injects classic `anchor_spl::token::ID`; Token-2022 tests
+///   override via `build_with`). `#[bundle(inject = <expr>)]` on a field
+///   is the escape hatch for accounts that cannot be a typed
+///   `Program<T>`; an explicit attribute always beats the rule. Fields
+///   the rule classifies also land in a generated host-only
+///   `injected_programs() -> Vec<(Pubkey, &str)>` table, which
+///   `AnchorContext::alias_programs` feeds to the alias layer so injected
+///   programs render named with zero registration.
 /// - `impl BuildableIx<Bundle> for crate::instruction::<StructName>`
 ///   pairs the args struct with its accounts struct at the type level.
 ///   `Program::build_ix(bundle, args)` consumes both and emits an
@@ -113,8 +123,8 @@ use syn::{parse_macro_input, DeriveInput};
 ///             vault: b.vault,
 ///             escrow: b.escrow,
 ///             // Auto-injected from field types in the Accounts struct:
-///             token_program: anchor_spl::token::ID,
-///             system_program: anchor_lang::solana_program::system_program::ID,
+///             token_program: anchor_spl::token::ID, // the Interface opinion
+///             system_program: <System as anchor_lang::Id>::id(), // the rule
 ///         }
 ///     }
 /// }
@@ -145,7 +155,10 @@ pub fn derive_bundled_pubkeys(input: TokenStream) -> TokenStream {
 }
 
 /// Emit `impl Default` for a struct of `Pubkey` fields, filling every
-/// field with `Pubkey::new_unique()`.
+/// field with `Pubkey::new_unique()` unless it carries
+/// `#[bundle(default = <expr>)]`, which pins that field to the expression
+/// (a known mint, a real program id) and deletes the hand-rolled `Default`
+/// impls downstream tests used to need.
 ///
 /// Pubkey bundles in tests want valid-looking placeholders for fields
 /// the test hasn't bound yet (so `struct update` syntax can fill in the
@@ -201,7 +214,7 @@ pub fn derive_bundled_pubkeys(input: TokenStream) -> TokenStream {
 ///     ..EscrowBundle::default()
 /// };
 /// ```
-#[proc_macro_derive(Bundle)]
+#[proc_macro_derive(Bundle, attributes(bundle))]
 pub fn derive_bundle(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let default = emit::emit_bundle_default(&input);

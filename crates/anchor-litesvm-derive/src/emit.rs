@@ -7,9 +7,47 @@ use quote::quote;
 pub fn emit(spec: &Spec) -> TokenStream {
     let from_impl = emit_from_impl(spec);
     let buildable_impl = emit_buildable_impl(spec);
+    let injected = emit_injected_programs(spec);
     quote! {
         #from_impl
         #buildable_impl
+        #injected
+    }
+}
+
+/// Emit a host-only `injected_programs()` table on the accounts struct: one
+/// `(id, name)` pair per field the structural rule classified, so injected
+/// programs name themselves (the table feeds the alias layer the way the
+/// Discriminator tables feed `register_program_instructions`). Nothing is
+/// emitted when no field was rule-classified.
+fn emit_injected_programs(spec: &Spec) -> TokenStream {
+    let entries: Vec<TokenStream> = spec
+        .fields
+        .iter()
+        .filter_map(|f| {
+            let name = f.injected_name.as_deref()?;
+            let FieldSource::Const(expr) = &f.source else {
+                return None;
+            };
+            Some(quote! { (#expr, #name) })
+        })
+        .collect();
+    if entries.is_empty() {
+        return quote!();
+    }
+    let ident = &spec.accounts_ident;
+    let (impl_generics, ty_generics, where_clause) = spec.generics.split_for_impl();
+    quote! {
+        impl #impl_generics #ident #ty_generics #where_clause {
+            /// The programs the `BundledPubkeys` structural rule injects into
+            /// this accounts struct, as `(id, name)` pairs. Host-only; feed it
+            /// to the alias layer (e.g. `ctx.alias_programs(...)`) so injected
+            /// programs render named with zero registration.
+            #[cfg(not(target_os = "solana"))]
+            pub fn injected_programs() -> ::std::vec::Vec<(anchor_lang::prelude::Pubkey, &'static str)> {
+                ::std::vec![ #(#entries),* ]
+            }
+        }
     }
 }
 
@@ -87,10 +125,14 @@ fn emit_buildable_impl(spec: &Spec) -> TokenStream {
 
 /// Emit `impl Default for Bundle { fn default() -> Self { ... Pubkey::new_unique() ... } }`.
 ///
-/// Every field is filled with `Pubkey::new_unique()`. We do not inspect
-/// the field's type; if the user has a non-Pubkey field, `new_unique()`
-/// won't compile and they can hand-write Default instead. That trade-off
-/// keeps this derive tiny and the failure mode obvious.
+/// Every field is filled with `Pubkey::new_unique()` unless it carries
+/// `#[bundle(default = <expr>)]`, in which case the expression is used. The
+/// per-field override is what deletes hand-rolled `Default` impls downstream
+/// (a known mint, a real program id) while unannotated fields keep the
+/// fail-loudly placeholder semantics. We do not inspect the field's type; if
+/// the user has a non-Pubkey field, `new_unique()` won't compile and they
+/// can hand-write Default instead. That trade-off keeps this derive tiny and
+/// the failure mode obvious.
 pub fn emit_bundle_default(input: &syn::DeriveInput) -> TokenStream {
     use syn::spanned::Spanned;
     let name = &input.ident;
@@ -105,10 +147,16 @@ pub fn emit_bundle_default(input: &syn::DeriveInput) -> TokenStream {
         )
         .to_compile_error();
     };
-    let assignments = named.named.iter().map(|f| {
-        let name = f.ident.as_ref().expect("named");
-        quote! { #name: ::anchor_litesvm::BundleDefault::bundle_default() }
-    });
+    let mut assignments = Vec::new();
+    for f in &named.named {
+        let fname = f.ident.as_ref().expect("named");
+        match bundle_default_override(f) {
+            Ok(Some(expr)) => assignments.push(quote! { #fname: #expr }),
+            Ok(None) => assignments
+                .push(quote! { #fname: ::anchor_litesvm::BundleDefault::bundle_default() }),
+            Err(e) => return e.to_compile_error(),
+        }
+    }
     quote! {
         impl ::core::default::Default for #name {
             fn default() -> Self {
@@ -118,6 +166,45 @@ pub fn emit_bundle_default(input: &syn::DeriveInput) -> TokenStream {
             }
         }
     }
+}
+
+/// Parse `#[bundle(default = <expr>)]` on a bundle field, if present. The
+/// `bundle` helper-attribute namespace is shared with `BundledPubkeys`'
+/// field attributes, but the two derives sit on different structs (accounts
+/// vs bundle), so each parser owns its keys; unknown keys are compile errors.
+fn bundle_default_override(f: &syn::Field) -> syn::Result<Option<TokenStream>> {
+    use syn::spanned::Spanned;
+    let mut found = None;
+    for attr in &f.attrs {
+        if !attr.path().is_ident("bundle") {
+            continue;
+        }
+        let meta: syn::Meta = attr.parse_args().map_err(|e| {
+            syn::Error::new(attr.span(), format!("#[bundle(...)] on a Bundle field expects `default = <expr>`: {e}"))
+        })?;
+        match &meta {
+            syn::Meta::NameValue(nv) if nv.path.is_ident("default") => {
+                if found.is_some() {
+                    return Err(syn::Error::new(
+                        attr.span(),
+                        "duplicate #[bundle(default = ...)] on the same field",
+                    ));
+                }
+                let expr = &nv.value;
+                found = Some(quote! { #expr });
+            }
+            other => {
+                return Err(syn::Error::new(
+                    attr.span(),
+                    format!(
+                        "unknown `#[bundle({})]` on a Bundle field; expected `default = <expr>`",
+                        quote!(#other)
+                    ),
+                ));
+            }
+        }
+    }
+    Ok(found)
 }
 
 /// Emit `impl Resolvable for Bundle`: call `resolve_field` on every field, so

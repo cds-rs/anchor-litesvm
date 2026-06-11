@@ -101,6 +101,19 @@ impl AnchorContext {
     /// Register `pubkey -> label` in the context's alias table. Later
     /// inserts shadow earlier ones, so this also serves as a rename when
     /// an actor's role changes mid-test (e.g. authority rotation).
+    /// Feed a `(pubkey, name)` program table into the alias layer: the
+    /// consumption end of the `BundledPubkeys` structural rule's generated
+    /// `injected_programs()` (and any other table of the same shape), the
+    /// way `register_program_instructions` consumes the Discriminator
+    /// tables. `ctx.alias_programs(&Make::injected_programs())` and every
+    /// injected program renders named with zero per-program registration.
+    pub fn alias_programs(&mut self, table: &[(Pubkey, &str)]) -> &mut Self {
+        for (pubkey, name) in table {
+            self.alias(*pubkey, *name);
+        }
+        self
+    }
+
     pub fn alias(&mut self, pubkey: Pubkey, label: impl Into<String>) -> &mut Self {
         self.aliases.add(pubkey, label);
         self

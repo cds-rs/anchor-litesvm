@@ -50,6 +50,11 @@ pub mod instruction {
 pub struct Signer<'info, T = ()>(::core::marker::PhantomData<&'info T>);
 pub struct Program<'info, T>(::core::marker::PhantomData<&'info T>);
 pub struct System;
+impl anchor_lang::Id for System {
+    fn id() -> Pubkey {
+        anchor_lang::solana_program::system_program::ID
+    }
+}
 
 #[derive(Copy, Clone, Debug)]
 pub struct InitPollBundle {
