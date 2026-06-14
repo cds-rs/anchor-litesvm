@@ -404,9 +404,9 @@ impl AnchorContext {
     /// #     }
     /// # }
     /// let account_pubkey = Pubkey::new_unique();
-    /// let account: MyAccount = ctx.get_account(&account_pubkey).unwrap();
+    /// let account: MyAccount = ctx.try_load(&account_pubkey).unwrap();
     /// ```
-    pub fn get_account<T>(&self, address: &Pubkey) -> Result<T, AccountError>
+    pub fn try_load<T>(&self, address: &Pubkey) -> Result<T, AccountError>
     where
         T: AccountDeserialize,
     {
@@ -426,7 +426,7 @@ impl AnchorContext {
     ///
     /// Note: `try_deserialize_unchecked` handles the discriminator internally,
     /// so we pass the full account data.
-    pub fn get_account_unchecked<T>(&self, address: &Pubkey) -> Result<T, AccountError>
+    pub fn try_load_unchecked<T>(&self, address: &Pubkey) -> Result<T, AccountError>
     where
         T: AccountDeserialize,
     {
@@ -444,7 +444,7 @@ impl AnchorContext {
 
     /// Load an Anchor account, panicking on failure.
     ///
-    /// Test-oriented sibling of [`get_account`](Self::get_account): the same fetch
+    /// Test-oriented sibling of [`try_load`](Self::try_load): the same fetch
     /// and deserialization, but failures (missing account, wrong discriminator,
     /// deser error) panic with the address and underlying [`AccountError`] in the
     /// message instead of returning a `Result`. Use in tests where a missing or
@@ -459,19 +459,19 @@ impl AnchorContext {
     where
         T: AccountDeserialize,
     {
-        self.get_account(address)
+        self.try_load(address)
             .unwrap_or_else(|e| panic!("failed to load account at {address}: {e}"))
     }
 
     /// Load an Anchor account without discriminator check, panicking on failure.
     ///
-    /// Test-oriented sibling of [`get_account_unchecked`](Self::get_account_unchecked).
+    /// Test-oriented sibling of [`try_load_unchecked`](Self::try_load_unchecked).
     /// Same panic semantics as [`load`](Self::load).
     pub fn load_unchecked<T>(&self, address: &Pubkey) -> T
     where
         T: AccountDeserialize,
     {
-        self.get_account_unchecked(address)
+        self.try_load_unchecked(address)
             .unwrap_or_else(|e| panic!("failed to load account at {address}: {e}"))
     }
 

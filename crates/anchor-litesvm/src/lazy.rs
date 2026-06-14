@@ -18,7 +18,7 @@
 //!     fn resolve(self, ctx: &AnchorContext) -> Pubkey {
 //!         match self {
 //!             MySeed::CounterPda(parent) => {
-//!                 let p: ParentState = ctx.get_account(&parent).unwrap();
+//!                 let p: ParentState = ctx.try_load(&parent).unwrap();
 //!                 derive_child(parent, p.next_index)
 //!             }
 //!         }

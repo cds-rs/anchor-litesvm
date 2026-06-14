@@ -58,7 +58,7 @@ fn test_my_anchor_program() {
         .send_ok(); // builds, sends, asserts success
 
     // 4. Read an Anchor account back, discriminator-checked.
-    let account: MyAccount = ctx.get_account(&pda).unwrap();
+    let account: MyAccount = ctx.try_load(&pda).unwrap();
 }
 ```
 
@@ -170,10 +170,10 @@ ctx.execute_instruction(ix, &[&user])?.assert_success();
 
 ```rust
 // Deserialize with discriminator check
-let account: MyAccount = ctx.get_account(&pda)?;
+let account: MyAccount = ctx.try_load(&pda)?;
 
 // Deserialize without check (for PDAs with custom layouts)
-let account: MyAccount = ctx.get_account_unchecked(&pda)?;
+let account: MyAccount = ctx.try_load_unchecked(&pda)?;
 ```
 
 ### Event Parsing

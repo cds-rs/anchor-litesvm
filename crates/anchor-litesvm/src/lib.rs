@@ -113,7 +113,7 @@
 //! ### Account Deserialization
 //!
 //! ```rust,ignore
-//! let account: MyAccountType = ctx.get_account(&pda)?;
+//! let account: MyAccountType = ctx.try_load(&pda)?;
 //! assert_eq!(account.authority, user.pubkey());
 //! ```
 //!
