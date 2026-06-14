@@ -112,8 +112,7 @@ friction. Skip **C** on litesvm 0.6.
 
 Whichever ships:
 - Lives in `litesvm-utils` next to `report.rs`, so both `AnchorContext` and a
-  bare `LiteSVM` get it; backported to `compat/anchor-0.31` per the parity
-  workflow ([../PARITY.md](../PARITY.md)).
+  bare `LiteSVM` get it.
 - Renders through the same alias resolution `Report` uses: pubkeys become role
   names, values are plain integers/enums, no base58 or timestamps, so committed
   reports stay byte-stable and diffable (the determinism contract in
