@@ -315,11 +315,14 @@ fn walk_frame(
     let target = collector.render_pubkey(&frame.program_id);
     record_participant(&target, participants);
 
+    // An undecoded instruction has no name. A bare `?` Mermaid message (no
+    // compute suffix to pad it) fails to parse on GitHub and drops the whole
+    // diagram to raw text, so use a word instead.
     let ix_name = frame
         .instruction_name
         .as_deref()
         .or(decoded.as_deref())
-        .unwrap_or("?");
+        .unwrap_or("unnamed");
 
     // Push the forward arrow. Labels carry the instruction name only:
     // compute units are a measurement, not part of the call/return
