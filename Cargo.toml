@@ -23,7 +23,7 @@ keywords = ["solana", "anchor", "litesvm", "testing", "blockchain"]
 # narrow anchor 0.31 / solana 2.x ecosystem. Do not relax to `^` here.
 # ============================================================================
 [workspace.dependencies]
-litesvm = "=0.6.1"
+litesvm = { git = "https://github.com/cds-rs/litesvm", branch = "compat/anchor-0.31" }
 anchor-lang = "=0.31.1"
 anchor-spl = "=0.31.1"
 solana-sdk = "=2.2.1"
