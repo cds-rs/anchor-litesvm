@@ -141,6 +141,32 @@ impl AnchorLiteSVM {
             .build()
     }
 
+    /// Like [`build_with_program`](Self::build_with_program), but reads the
+    /// program from a `.so` file at *runtime* instead of taking bytes embedded
+    /// at compile time with `include_bytes!`. Reach for it when the artifact is
+    /// produced by a separate build step (a plain `anchor build`) and may not
+    /// exist when the test crate compiles.
+    ///
+    /// Panics with a diagnosis when the file is missing or is a stub (an ELF
+    /// under 4 KiB almost certainly built without its entrypoint).
+    pub fn build_with_program_from_file(
+        program_id: Pubkey,
+        name: impl Into<String>,
+        path: &str,
+    ) -> AnchorContext {
+        let bytes = std::fs::read(path).unwrap_or_else(|e| {
+            panic!("build_with_program_from_file: read {path}: {e} (build the program first)")
+        });
+        assert!(
+            bytes.len() >= 4096,
+            "build_with_program_from_file: {path} is {} bytes \u{2014} likely an \
+             entrypoint-less stub; check the program's build features \
+             (e.g. `--features sbf`)",
+            bytes.len()
+        );
+        Self::new().deploy_program(program_id, name, &bytes).build()
+    }
+
     /// Convenience method to set up multiple named programs
     ///
     /// The first program in the list becomes the primary program.

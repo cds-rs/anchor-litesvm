@@ -291,4 +291,38 @@ mod integration_tests {
         assert_eq!(instruction.program_id, program_id);
         assert!(!instruction.data.is_empty());
     }
+
+    #[test]
+    fn cast_vocabulary_funds_aliases_and_guards_uniqueness() {
+        use litesvm_utils::TestHelpers;
+
+        let program_id = Pubkey::new_unique();
+        let mut ctx = AnchorContext::new(LiteSVM::new(), program_id);
+
+        // cast_actor: deterministic, funded, aliased under its name.
+        let issuer = ctx.cast_actor("issuer");
+        assert_eq!(ctx.label(&issuer.pubkey()), "issuer");
+
+        // cast_mint: a real SPL mint a holder can be funded from.
+        let usdc = ctx.cast_mint("USDC", &issuer, 6);
+        assert_eq!(ctx.label(&usdc), "USDC");
+
+        // fund_ata: a holder with a balance in its ATA, aliased "<owner>/<mint>".
+        let alice = ctx.cast_actor("Alice");
+        let alice_usdc = ctx.fund_ata(&alice, &usdc, &issuer, 1_000_000);
+        assert_eq!(ctx.label(&alice_usdc), "Alice/USDC");
+        assert_eq!(ctx.svm.token_balance(&alice_usdc), Some(1_000_000));
+
+        // cast_actor_with_sol: an exact stake, aliased like any cast.
+        let whale = ctx.cast_actor_with_sol("Whale", 5_000_000_000);
+        assert_eq!(ctx.label(&whale.pubkey()), "Whale");
+    }
+
+    #[test]
+    #[should_panic(expected = "already used in this scenario")]
+    fn cast_vocabulary_rejects_a_duplicate_name() {
+        let mut ctx = AnchorContext::new(LiteSVM::new(), Pubkey::new_unique());
+        ctx.cast_actor("dup");
+        ctx.cast_actor("dup");
+    }
 }

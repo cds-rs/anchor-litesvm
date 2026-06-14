@@ -2,7 +2,12 @@ use crate::account::AccountError;
 use crate::program::Program;
 use anchor_lang::AccountDeserialize;
 use litesvm::LiteSVM;
-use litesvm_utils::{Aliases, InstructionInfo, TransactionHelpers, TransactionResult};
+use litesvm_utils::{
+    deterministic_keypair, Aliases, InstructionInfo, TestHelpers, TransactionHelpers,
+    TransactionResult,
+};
+use spl_associated_token_account::get_associated_token_address;
+use std::collections::HashSet;
 use solana_sdk::hash::Hash;
 use solana_sdk::signer::keypair::Keypair;
 use solana_program::instruction::Instruction;
@@ -31,6 +36,10 @@ pub struct AnchorContext {
     payer: Keypair,
     /// The program instance for instruction building
     program: Program,
+    /// Names handed to the `cast_*` vocabulary on this context. Each cast seeds
+    /// a keypair from its name and registers an alias, so a repeated name would
+    /// silently alias two casts to one identity; the cast helpers assert here.
+    cast_names: HashSet<String>,
 }
 
 impl AnchorContext {
@@ -62,6 +71,7 @@ impl AnchorContext {
             aliases: Aliases::default(),
             payer,
             program,
+            cast_names: HashSet::new(),
         }
     }
 
@@ -75,6 +85,7 @@ impl AnchorContext {
             aliases: Aliases::default(),
             payer,
             program,
+            cast_names: HashSet::new(),
         }
     }
 
@@ -128,6 +139,106 @@ impl AnchorContext {
     /// of hand-rolling a pubkey-to-name match.
     pub fn label(&self, pubkey: &Pubkey) -> String {
         self.aliases.label(pubkey)
+    }
+
+    /// Cast a funded, named signer: a deterministic keypair (reproducible per
+    /// program + name), airdropped 100 SOL, and aliased under `name`.
+    pub fn cast_actor(&mut self, name: &str) -> Keypair {
+        self.cast_actor_with_sol(name, 100_000_000_000)
+    }
+
+    /// [`cast_actor`](Self::cast_actor) with an explicit lamport balance instead
+    /// of the 100 SOL float, for scenarios that assert on exact SOL.
+    pub fn cast_actor_with_sol(&mut self, name: &str, lamports: u64) -> Keypair {
+        self.track_cast(name);
+        let kp = deterministic_keypair(&self.program_id.to_string(), name);
+        self.svm
+            .airdrop(&kp.pubkey(), lamports)
+            .expect("airdrop to a freshly-cast actor");
+        self.alias(kp.pubkey(), name);
+        kp
+    }
+
+    /// Cast a named passive account: a deterministic, rent-funded pubkey aliased
+    /// under `name`. For a recipient / target that isn't a signer.
+    pub fn cast_account(&mut self, name: &str) -> Pubkey {
+        self.track_cast(name);
+        let pk = deterministic_keypair(&self.program_id.to_string(), name).pubkey();
+        self.svm
+            .airdrop(&pk, 1_000_000_000)
+            .expect("rent-fund a freshly-cast account");
+        self.alias(pk, name);
+        pk
+    }
+
+    /// Cast a token mint: a deterministic mint account, created and initialized
+    /// under `authority` with `decimals`, then aliased under `name`. The
+    /// authority pays rent and signs, so cast it first.
+    pub fn cast_mint(&mut self, name: &str, authority: &Keypair, decimals: u8) -> Pubkey {
+        self.track_cast(name);
+        let mint_kp = deterministic_keypair(&self.program_id.to_string(), name);
+        self.svm
+            .create_token_mint_at(authority, &mint_kp, decimals)
+            .expect("create a freshly-cast mint");
+        let mint = mint_kp.pubkey();
+        self.alias(mint, name);
+        mint
+    }
+
+    /// Fund `owner`'s associated token account for `mint`: create the ATA, alias
+    /// it under the composed `"<owner>/<mint>"` name, and mint `amount` from
+    /// `authority` (skipped when `amount` is 0). Returns the ATA address.
+    pub fn fund_ata(
+        &mut self,
+        owner: &Keypair,
+        mint: &Pubkey,
+        authority: &Keypair,
+        amount: u64,
+    ) -> Pubkey {
+        let ata = self
+            .svm
+            .create_associated_token_account(mint, owner)
+            .expect("create an ATA for a funded holder");
+        self.alias_ata(&owner.pubkey(), mint);
+        if amount > 0 {
+            self.svm
+                .mint_to(mint, &ata, authority, amount)
+                .expect("mint to a funded holder");
+        }
+        ata
+    }
+
+    /// Derive the associated token account for `(owner, mint)`, register it under
+    /// the composed name `"<owner>/<mint>"`, and return its address. Name the
+    /// leaves (owner, mint) first so the composed name reads cleanly.
+    pub fn alias_ata(&mut self, owner: &Pubkey, mint: &Pubkey) -> Pubkey {
+        let label = format!("{}/{}", self.label(owner), self.label(mint));
+        self.alias_ata_as(owner, mint, label)
+    }
+
+    /// [`alias_ata`](Self::alias_ata) with a caller-chosen label instead of the
+    /// canonical `<owner>/<mint>`.
+    pub fn alias_ata_as(
+        &mut self,
+        owner: &Pubkey,
+        mint: &Pubkey,
+        label: impl Into<String>,
+    ) -> Pubkey {
+        let ata = get_associated_token_address(owner, mint);
+        self.alias(ata, label);
+        ata
+    }
+
+    /// Record `name` as a cast on this context, asserting it is the first use:
+    /// the cast-list discipline. A repeated name would seed the same keypair and
+    /// re-alias it, almost always a mistake.
+    fn track_cast(&mut self, name: &str) {
+        assert!(
+            self.cast_names.insert(name.to_string()),
+            "cast name {name:?} already used in this scenario; cast names seed \
+             keypairs and register aliases, so a duplicate would alias two casts \
+             to one identity. Give this cast a distinct name."
+        );
     }
 
     /// Start a fluent [`Tx`](crate::tx::Tx) chain: build + send +
