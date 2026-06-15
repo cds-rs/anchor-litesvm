@@ -217,3 +217,24 @@ litesvm and the fidelity of a forked cluster doesn't choose at authoring time; i
 chooses the backend at construction, and the vocabulary, the model, and every
 renderer above behave identically. The trait boundary is what turns "test against
 X" into a one-line backend swap.
+
+## Provenance: where this came from
+
+This shape did not arrive at once, and the [endpoint-agnostic
+doc](endpoint-agnostic-architecture.md) records its origin under the names it
+carried then. The port began on the surfpool branches as `ExecutionBackend`,
+with a single in-memory `LiteSvmBackend` and a record type called
+`ExecutionRecord`. An `RpcBackend` over JSON-RPC followed (a surfnet endpoint),
+which proved the real claim: the same scenario could run in-memory or against a
+live cluster and render the same. A third engine, the mollusk adapter, made the
+trait's generality concrete rather than aspirational, and at that point
+"execution backend" undersold what the seam had become, so it was renamed
+`TestSVM` and the record `model::Transaction`: not "the thing that executes" but
+the vocabulary every engine and program framework speaks. The naming sockets,
+the event sockets, and the type-erasure boundary accreted onto that port
+afterward, the event sockets last (see the remark above).
+
+So read the endpoint-agnostic doc for the surfpool round-trip and the RPC
+trace asymmetry in their original form; read this doc for the port and the
+vocabulary as the source defines them today. Where the two disagree on a name,
+the source (and this doc) win.

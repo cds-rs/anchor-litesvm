@@ -7,6 +7,8 @@ the book knows where the deep internals are.
 
 ## Where the internals are documented
 
+- **The design premise and decisions** (why trait boundaries, why fork-and-adapt
+  the ecosystem, and the settled decisions that follow): [`docs/adr/`](https://github.com/cds-rs/anchor-litesvm/blob/turbin3/docs/adr/README.md), starting with [ADR 0000](https://github.com/cds-rs/anchor-litesvm/blob/turbin3/docs/adr/0000-the-premise-trait-boundaries-and-ecosystem-reach.md).
 - **Traits as boundaries** (the layered crates, the `TestSVM` port, the naming
   and event vocabulary as backend sockets, and how one scenario runs on every
   engine): [`docs/design/trait-boundaries.md`](https://github.com/cds-rs/anchor-litesvm/blob/turbin3/docs/design/trait-boundaries.md).
