@@ -278,7 +278,7 @@ Events (`Program data:`) and, opt-in via `ANCHOR_LITESVM_MERMAID_LOGS`, logs
 (`Program log:`) surface as informational dashed arrows back to the tx
 initiator. Children render before the parent's return line, because Solana runs
 the inner CPIs before the parent's post-CPI check fires; splitting the call and
-return lines is what keeps that chronology honest.
+return lines is what maintains order.
 
 ### Authority graph (`authority.rs`)
 

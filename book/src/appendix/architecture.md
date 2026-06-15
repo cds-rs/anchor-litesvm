@@ -7,6 +7,9 @@ the book knows where the deep internals are.
 
 ## Where the internals are documented
 
+- **Traits as boundaries** (the layered crates, the `TestSVM` port, the naming
+  and event vocabulary as backend sockets, and how one scenario runs on every
+  engine): [`docs/design/trait-boundaries.md`](https://github.com/cds-rs/anchor-litesvm/blob/turbin3/docs/design/trait-boundaries.md).
 - **Renderer family** (the `CpiModel`, the `Renderer` port, the tree / mermaid /
   authority / ownership adapters): [`docs/design/cpi-rendering.md`](https://github.com/cds-rs/anchor-litesvm/blob/turbin3/docs/design/cpi-rendering.md).
 - **The derive** (`BundledPubkeys` and friends): [`docs/design/bundled-pubkeys.md`](https://github.com/cds-rs/anchor-litesvm/blob/turbin3/docs/design/bundled-pubkeys.md).

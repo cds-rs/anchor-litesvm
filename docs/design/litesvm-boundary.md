@@ -130,7 +130,7 @@ fork. Its types are deliberately shaped *as litesvm types* (raw pubkeys and
 frames, no `Aliases`, no anchor coupling), so they can relocate into litesvm
 unchanged.
 
-It is a prototype, not yet the load-bearing path: `AnchorContext.svm` is still a
+It is a prototype, not yet the path the rest of the system leans on: `AnchorContext.svm` is still a
 raw `LiteSVM` with the `TraceRecorder` riding the hook, not an `ObservedSvm`.
 Routing the context through the adapter, and then promoting the registry into the
 fork, is the migration this points toward. The success criterion is **deletion**:
