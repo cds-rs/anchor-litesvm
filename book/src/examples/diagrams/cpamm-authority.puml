@@ -1,0 +1,18 @@
+@startuml
+left to right direction
+skinparam shadowing false
+actor "Authority" as Admin
+actor "LP" as LP
+actor "Trader" as Trader
+rectangle "AMM Program\n(signs as config PDA)" as Prog
+usecase "initialize" as Init
+usecase "add / remove\nliquidity" as Liq
+usecase "swap" as Swap
+usecase "set_locked /\nupdate_fee" as Adm
+Admin --> Init : signs
+LP --> Liq : signs
+Trader --> Swap : signs
+Admin --> Adm : authority only
+Prog --> Liq : invoke_signed
+Prog --> Swap : invoke_signed
+@enduml

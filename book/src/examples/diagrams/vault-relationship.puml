@@ -1,0 +1,10 @@
+@startuml
+left to right direction
+skinparam shadowing false
+actor "Alice\n(user)" as Alice
+rectangle "vault_state\n(PDA)" as State
+rectangle "vault\n(PDA)" as Vault
+Alice --> State : seeds ["state", user]
+State --> Vault : seeds ["vault", vault_state]
+Alice ..> Vault : deposits / withdraws
+@enduml

@@ -1,0 +1,16 @@
+# Book tasks. Run from book/.
+
+default: build
+
+# Re-render every book/src/**/*.puml to a sibling .svg via a PlantUML server
+# (default http://localhost:8080; override with PLANTUML_SERVER=<url>). The
+# SVGs are committed, so this is only needed when a .puml changes.
+render-diagrams:
+    ./render-diagrams.sh
+
+# Build the mdBook. Diagrams are committed SVGs, so no PlantUML server is needed.
+build:
+    mdbook build
+
+# Render diagrams, then build.
+all: render-diagrams build

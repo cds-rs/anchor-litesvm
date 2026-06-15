@@ -1,0 +1,7 @@
+@startuml
+left to right direction
+skinparam shadowing false
+actor user_account
+usecase "initialize\n(store value)" as Init
+user_account --> Init : signs and pays
+@enduml

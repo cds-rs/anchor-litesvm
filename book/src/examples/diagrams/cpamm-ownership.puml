@@ -1,0 +1,10 @@
+@startuml
+left to right direction
+skinparam shadowing false
+rectangle "Token Program" as Tok
+rectangle "AMM Program" as Prog
+rectangle "vault_x / vault_y\n(ATAs)" as Vaults
+rectangle "config\n(state)" as Config
+Tok --> Vaults : owns
+Prog --> Config : owns (mint authority for LP)
+@enduml

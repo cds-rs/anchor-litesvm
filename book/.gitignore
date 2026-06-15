@@ -1,0 +1,7 @@
+# mdbook build output
+/book
+
+# The mermaid runtime assets (mermaid.min.js, mermaid-init.js) are NOT ignored:
+# book.toml references them via additional-js, so they're committed (pinned to
+# the mdbook-mermaid version) to keep a fresh-clone `mdbook build` working
+# without re-running `mdbook-mermaid install`.
