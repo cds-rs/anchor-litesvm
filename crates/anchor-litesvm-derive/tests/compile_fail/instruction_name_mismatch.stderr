@@ -1,0 +1,10 @@
+error[E0425]: cannot find type `InitPoll` in module `crate::instruction`
+  --> tests/compile_fail/instruction_name_mismatch.rs:53:12
+   |
+53 | pub struct InitPoll<'info> {
+   |            ^^^^^^^^ not found in `crate::instruction`
+   |
+help: consider importing this struct
+   |
+12 + use crate::accounts::InitPoll;
+   |
