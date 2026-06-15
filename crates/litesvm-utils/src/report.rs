@@ -33,6 +33,18 @@ enum Event {
     Snapshot { label: String, block: MarkdownBlock },
     /// An observed value compared against an expectation.
     Check { label: String, expected: String, actual: String, pass: bool },
+    /// A state change told as a story: what it was, what it became, what that
+    /// means. Renders as a neutral table row (not a checklist item), so a
+    /// report documenting a *violated* invariant doesn't read as a green
+    /// feature list.
+    Transition {
+        label: String,
+        before: String,
+        expected: String,
+        actual: String,
+        meaning: String,
+        pass: bool,
+    },
 }
 
 /// A self-contained, render-ready Markdown fragment.
@@ -320,6 +332,40 @@ impl Report {
         self
     }
 
+    /// Record a state change as before -> after -> what it means, with teeth.
+    ///
+    /// For reports that document a transition (especially a *violated*
+    /// invariant), [`check`](Report::check)'s checklist rendering works
+    /// against the reader: `- [x]` rows of confirmed violations read as a
+    /// passing feature list. `transition` renders a neutral table instead
+    ///
+    /// | Observation | Before | After | What it means |
+    /// |---|---|---|---|
+    /// | yes_votes | 0 | 255 | `-= 1` underflowed |
+    ///
+    /// and still asserts: `actual_after` is compared against `expected_after`,
+    /// SOFT like `check` (recorded now, the test fails at `Drop` if any row
+    /// missed), so presentation and enforcement never split. Consecutive
+    /// `transition` calls collapse into one table.
+    pub fn transition<T: PartialEq + Debug>(
+        &mut self,
+        label: impl Into<String>,
+        before: T,
+        expected_after: T,
+        actual_after: T,
+        meaning: impl Into<String>,
+    ) -> &mut Self {
+        self.events.push(Event::Transition {
+            label: label.into(),
+            before: format!("{before:?}"),
+            expected: format!("{expected_after:?}"),
+            actual: format!("{actual_after:?}"),
+            meaning: meaning.into(),
+            pass: expected_after == actual_after,
+        });
+        self
+    }
+
     /// Declare that this scenario is EXPECTED to abort mid-flight: it is a
     /// TDD red spec whose behaviour is not implemented yet.
     ///
@@ -351,7 +397,15 @@ impl Report {
     }
 
     fn failures(&self) -> usize {
-        self.events.iter().filter(|e| matches!(e, Event::Check { pass: false, .. })).count()
+        self.events
+            .iter()
+            .filter(|e| {
+                matches!(
+                    e,
+                    Event::Check { pass: false, .. } | Event::Transition { pass: false, .. }
+                )
+            })
+            .count()
     }
 
     fn flush(&mut self) {
@@ -430,6 +484,32 @@ impl Report {
                         i += 1;
                     }
                     blocks.push(lines.join("\n"));
+                }
+                Event::Transition { .. } => {
+                    // Consecutive transitions collapse into one neutral table.
+                    let mut rows = Vec::new();
+                    while let Some(Event::Transition {
+                        label,
+                        before,
+                        expected,
+                        actual,
+                        meaning,
+                        pass,
+                    }) = self.events.get(i)
+                    {
+                        let after = if *pass {
+                            format!("`{actual}`")
+                        } else {
+                            format!("`{actual}` (expected `{expected}`)")
+                        };
+                        rows.push(format!("| {label} | `{before}` | {after} | {meaning} |"));
+                        i += 1;
+                    }
+                    let mut table = String::from(
+                        "| Observation | Before | After | What it means |\n|---|---|---|---|\n",
+                    );
+                    table.push_str(&rows.join("\n"));
+                    blocks.push(table);
                 }
                 Event::Step(h) => {
                     blocks.push(format!("### {h}"));
@@ -555,6 +635,34 @@ mod report_tests {
         let out = md.render(true);
         assert!(out.starts_with("## t — ABORTED"), "got: {out}");
         assert!(out.contains("panicked before reaching its end"));
+    }
+
+    #[test]
+    fn transitions_render_one_neutral_table_and_carry_teeth() {
+        let mut md = Report::new("t", "i");
+        // Two consecutive transitions: one as expected, one missed.
+        md.transition("yes_votes", 0u8, 255, 255, "`-= 1` underflowed");
+        md.transition("no_votes", 7u8, 7, 9, "must be untouched");
+        let out = md.render(false);
+
+        // One table, neutral headers, no checklist syntax.
+        assert_eq!(out.matches("| Observation | Before | After |").count(), 1);
+        assert!(!out.contains("- [x]"), "{out}");
+        assert!(out.contains("| yes_votes | `0` | `255` | `-= 1` underflowed |"));
+        // The miss shows both values inline and fails the report.
+        assert!(out.contains("| no_votes | `7` | `9` (expected `7`) |"), "{out}");
+        assert!(out.contains("— FAIL"), "{out}");
+        assert_eq!(md.failures(), 1);
+        // The miss above is the fixture, not a real failure: disarm Drop's
+        // escalation (which is itself under test elsewhere).
+        std::mem::forget(md);
+    }
+
+    #[test]
+    fn passing_transitions_keep_the_report_green() {
+        let mut md = Report::new("t", "i");
+        md.transition("fee", 0u64, 4_000, 4_000, "swap fee accrued");
+        assert!(md.render(false).starts_with("## t — PASS"));
     }
 
     #[test]
