@@ -1,10 +1,20 @@
 [workspace]
 members = [
+    "crates/testsvm",
     "crates/litesvm-utils",
     "crates/anchor-litesvm",
     "crates/anchor-litesvm-derive",
+    "crates/litesvm-pinocchio",
+    "crates/litesvm-pinocchio-derive",
+    "crates/litesvm-pinocchio-idl",
 ]
 resolver = "2"
+exclude = [
+    # Its own lockfile, deliberately: the mollusk graph (agave-4.0 tilde pins)
+    # and the litesvm graph (solana 3.4 pins) cannot share one lock. Same
+    # test, different backend, rebuild — applied to the workspace.
+    "crates/testsvm-mollusk",
+]
 
 [workspace.package]
 edition = "2021"
@@ -12,10 +22,24 @@ license = "MIT"
 repository = "https://github.com/brimigs/anchor-litesvm"
 keywords = ["solana", "anchor", "litesvm", "testing", "blockchain"]
 
+# Doc lints, applied to each member that opts in with `[lints] workspace = true`.
+# Broken intra-doc links fail `cargo doc`, so the generated API reference (which
+# replaced the hand-written one) can't silently rot. Add more lints here.
+[workspace.lints.rustdoc]
+broken_intra_doc_links = "deny"
+
+# `target_os = "solana"` is defined only on the SBF target. The litesvm-pinocchio
+# macros emit `#[cfg(not(target_os = "solana"))]` to keep host-only accessors out
+# of the on-chain binary; declaring the cfg here keeps a host build of any
+# workspace crate that uses them from warning on the unknown value.
+[workspace.lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }
+
 [workspace.dependencies]
-# Temporary path dep: tracks the unreleased 0.12 in the sibling litesvm tree
-# (adds `cpi_tree`). Switch back to `litesvm = "0.12"` once that ships on crates.io.
-litesvm = { path = "../litesvm/crates/litesvm" }
+# Temporary git dep: tracks the unreleased 0.12 in the fork (adds `cpi_tree`).
+# Switch back to `litesvm = "0.12"` once that ships on crates.io.
+litesvm = { git = "https://github.com/cds-rs/litesvm", branch = "main" }
+testsvm = { path = "crates/testsvm" }
 anchor-lang = "1.0.0"
 solana-program = "3.0.0"
 solana-program-pack = "3.1.0"
@@ -23,6 +47,16 @@ solana-message = "3.1"
 solana-keypair = "3.1.2"
 solana-signer = "3.0.0"
 solana-transaction = { version = "3.0", features = ["bincode"] }
+# Low-level agave crates for the trace recorder (must match litesvm's
+# versions so its `InvokeContext` / `TransactionContext` types unify).
+solana-account = "3.4"
+solana-program-runtime = "3.1"
+solana-transaction-context = "3.1"
+# RPC backend (optional, behind litesvm-utils `rpc` feature): talk to a surfnet/cluster.
+solana-rpc-client = "3.0"
+solana-rpc-client-api = "3.0"
+solana-commitment-config = "3.0"
+serde_json = "1"
 borsh = "1.5.3"
 sha2 = "0.10.8"
 thiserror = "2.0.18"

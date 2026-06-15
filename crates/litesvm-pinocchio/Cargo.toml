@@ -1,0 +1,24 @@
+[package]
+name = "litesvm-pinocchio"
+version = "0.4.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "BPF-safe macros for Pinocchio programs to declare their instruction and error vocabulary once, exposing the (code, name) tables the litesvm-utils testing registries consume."
+keywords = ["solana", "pinocchio", "litesvm", "testing"]
+
+[lints]
+workspace = true
+
+# Intentionally zero *runtime* dependencies: the macros emit `::core::*` and
+# `::pinocchio::*` paths that resolve in the *expanding* crate (the program),
+# not here, so this crate stays buildable for the `solana` BPF target. The one
+# dependency is the `Discriminator` derive, a proc-macro crate compiled only for
+# the host (never linked into the BPF binary), re-exported below.
+[dependencies]
+litesvm-pinocchio-derive = { path = "../litesvm-pinocchio-derive", version = "0.4.0" }
+
+# `pinocchio` appears only as a dev-dependency, to exercise the generated
+# `From<_> for ProgramError` impl in this crate's own tests.
+[dev-dependencies]
+pinocchio = "0.11"

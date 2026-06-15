@@ -1,0 +1,84 @@
+name: book-listings
+
+# The book's code blocks are `{{#include}}`d from real Anchor programs under
+# book/listings/*. This job compiles and tests each one, so a snippet shown in
+# the book can never drift from code that builds and passes. The mdBook job in
+# docs.yml is the cheap structural guard (it fails if an include path or anchor
+# name is wrong); this is the expensive correctness guard (it fails if the code
+# itself stops compiling or a test breaks).
+#
+# Each listing's `anchor-litesvm` is a git dependency on
+# `cds-rs/anchor-litesvm` branch `turbin3`, the same dependency the book tells
+# readers to use, so the listings are tested against the published API rather
+# than the local working tree. The job fetches that branch at build time.
+# Scoped to book/listings changes to keep the heavy Solana/Anchor toolchain
+# off unrelated commits.
+
+on:
+  push:
+    branches: [main, turbin3]
+    paths:
+      - 'book/listings/**'
+      - '.github/workflows/book-listings.yml'
+  pull_request:
+    paths:
+      - 'book/listings/**'
+      - '.github/workflows/book-listings.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  listings:
+    name: build + test each listing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install the Solana CLI (Agave)
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+
+      # Prebuilt binary from the v1.0.2 release (~15 MB, a couple of seconds),
+      # instead of `cargo install --git` which compiled anchor-cli from source
+      # (~5.5 min). `~/.cargo/bin` is already on PATH on GitHub runners.
+      - name: Install the Anchor CLI (prebuilt)
+        run: |
+          curl -sSfL -o "$HOME/.cargo/bin/anchor" \
+            https://github.com/solana-foundation/anchor/releases/download/v1.0.2/anchor-1.0.2-x86_64-unknown-linux-gnu
+          chmod +x "$HOME/.cargo/bin/anchor"
+          anchor --version
+
+      # Caches ~/.cargo (registry + git) and each listing's target/, keyed on
+      # the per-workspace Cargo.lock + rustc version, with automatic pruning.
+      # `cache-on-failure` saves even when a listing's tests fail, so a retry
+      # still skips the dep rebuild. Note: anchor-litesvm is a `branch =
+      # "turbin3"` dep, so its rev moves on every framework push and that one
+      # dep recompiles regardless; the Solana/Anchor version deps cache cleanly.
+      # Committing the resolved listing Cargo.locks keeps the key stable.
+      - name: Cache cargo + listing targets
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          workspaces: |
+            book/listings/first-test
+            book/listings/counter
+            book/listings/vault
+            book/listings/escrow
+            book/listings/cpamm
+
+      # `--no-idl`: the book never uses an IDL (no `declare_program!`), and
+      # skipping IDL generation avoids host-compiling the test targets during
+      # the build. `--ignore-keys`: CI mints a fresh program keypair (target/
+      # is gitignored) that won't match the committed `declare_id!`; the book
+      # references `<prog>::ID` and LiteSVM loads the `.so` at that id
+      # regardless, so the build and the test stay self-consistent.
+      - name: Build and test each listing
+        run: |
+          set -euo pipefail
+          for dir in book/listings/*/; do
+            echo "::group::$dir"
+            ( cd "$dir" && anchor build --no-idl --ignore-keys && cargo test --tests )
+            echo "::endgroup::"
+          done

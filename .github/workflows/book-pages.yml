@@ -1,0 +1,79 @@
+name: book-pages
+
+# Build the mdBook and publish it to the `gh-pages` branch, which GitHub Pages
+# serves at https://cds-rs.github.io/anchor-litesvm/. This reuses the same
+# mdbook + mdbook-mermaid versions as docs.yml, so the deployed book matches
+# exactly what that workflow validates on every book/ change. Scoped to book/
+# so unrelated commits don't trigger a redeploy.
+#
+# One-time setup (in the repo UI, after the first successful run creates the
+# branch): Settings -> Pages -> Source = "Deploy from a branch", Branch =
+# `gh-pages`, folder = `/ (root)`.
+
+on:
+  push:
+    branches: [turbin3]
+    paths:
+      - 'book/**'
+      - 'scripts/assemble-agent-skill.py'
+      - '.github/workflows/book-pages.yml'
+  workflow_dispatch:
+
+# The deploy action pushes the built site to the gh-pages branch using
+# GITHUB_TOKEN, so it needs write access to repo contents.
+permissions:
+  contents: write
+
+# Never let two deploys race onto gh-pages; the latest book wins.
+concurrency:
+  group: book-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: build + publish to gh-pages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # Prebuilt binaries, pinned to the versions docs.yml builds against.
+      - name: Install mdbook and preprocessors
+        uses: taiki-e/install-action@v2
+        with:
+          tool: mdbook@0.5.3,mdbook-mermaid@0.17.0
+
+      # The mermaid runtime assets are committed, so no `mdbook-mermaid install`
+      # is needed; the output lands in book/book.
+      - name: Build the book
+        run: mdbook build book
+
+      # The agent corpus rides the same deploy. The assembled skill (the
+      # agents pages with includes resolved; raw book/src markdown still
+      # carries {{#include}} directives, so the site is the only remote
+      # surface with the code in place) publishes three ways:
+      #   /agent-skill/            fetchable resolved markdown
+      #   /llms.txt                index at the site root
+      #   /agent-skill.tar.gz      one-line Claude Code install:
+      #     curl -fsSL <site>/agent-skill.tar.gz | tar -xz -C ~/.claude/skills
+      - name: Assemble + stage the agent skill
+        run: |
+          python3 scripts/assemble-agent-skill.py
+          cp -r build/agent-skill book/book/agent-skill
+          cp build/agent-skill/llms.txt book/book/llms.txt
+          cp -r build/agent-skill build/anchor-litesvm-testing
+          tar -czf book/book/agent-skill.tar.gz -C build anchor-litesvm-testing
+
+      # GitHub Pages runs Jekyll over a branch source by default, which would
+      # drop any path starting with an underscore. mdBook output is static and
+      # complete as-is, so opt out.
+      - name: Disable Jekyll
+        run: touch book/book/.nojekyll
+
+      - name: Publish to gh-pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: book/book
+          # gh-pages is a generated artifact, not history worth keeping; force a
+          # single commit each deploy so the branch stays a flat snapshot.
+          single-commit: true
