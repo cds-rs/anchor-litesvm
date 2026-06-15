@@ -69,7 +69,9 @@ impl<'a> LegendCollector<'a> {
     /// since a decoded event is free text, not a typed `Pubkey` to resolve.
     pub(super) fn decode_event(&self, payload: &str) -> Option<super::events::EventInfo> {
         let mut info = self.events.decode(payload)?;
-        info.fields = self.aliases.substitute_in_text(&info.fields);
+        for (_, value) in &mut info.fields {
+            *value = self.aliases.substitute_in_text(value);
+        }
         Some(info)
     }
 
@@ -265,11 +267,15 @@ fn render_frame(
         if is_last { TREE_EMPTY } else { TREE_CONT }
     );
 
-    // Decoded events this frame emitted, as annotation lines indented under it.
-    // Only *registered* events render here; an unregistered event is a raw
-    // base64 blob with no readable form, so the tree omits it (the mermaid view
-    // keeps a raw arrow for those). Placed before children: the frame announced
-    // the event, then its sub-calls ran.
+    // Decoded events this frame emitted, each as a labelled block: a `🔔 Name`
+    // header then one aligned `field: value` line. Only *registered* events
+    // render (an unregistered one is opaque base64, omitted here; the mermaid
+    // view keeps a raw arrow for those). Placed before children: the frame
+    // announced the event, then its sub-calls ran, so `│` continues the frame's
+    // spine down to those children (or its failure line) when they follow.
+    let more_follows =
+        !frame.children.is_empty() || matches!(&frame.outcome, CpiOutcome::Failed { message: Some(_) });
+    let conn = if more_follows { "│" } else { " " };
     for entry in &frame.logs {
         let FrameLog::Data(payload) = entry else {
             continue;
@@ -277,7 +283,14 @@ fn render_frame(
         let Some(info) = collector.decode_event(payload) else {
             continue;
         };
-        let _ = writeln!(out, "{descendant_prefix}{}", info.badge());
+        let _ = writeln!(out, "{descendant_prefix}{conn} 🔔 {}", info.name);
+        let width = info.fields.iter().map(|(k, _)| k.len()).max().unwrap_or(0) + 1;
+        let last = info.fields.len().saturating_sub(1);
+        for (i, (key, value)) in info.fields.iter().enumerate() {
+            let field = format!("{key}:");
+            let comma = if i == last { "" } else { "," };
+            let _ = writeln!(out, "{descendant_prefix}{conn}      {field:<width$} {value}{comma}");
+        }
     }
 
     // Order under a frame: children first (in invocation order), then

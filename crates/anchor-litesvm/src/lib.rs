@@ -218,6 +218,7 @@ pub mod account;
 pub mod buildable;
 pub mod builder;
 pub mod context;
+mod event_idl;
 pub mod events;
 pub mod instruction;
 pub mod lazy;

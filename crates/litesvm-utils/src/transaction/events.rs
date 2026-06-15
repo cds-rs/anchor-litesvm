@@ -24,35 +24,43 @@ use base64::Engine as _;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-/// A decoded event: its resolved name and the formatted field body.
+/// A decoded event: its resolved name and its fields as `(name, value)` pairs.
 ///
-/// `fields` is the field *body* (no type name; that's [`name`](Self::name)),
-/// with `Pubkey`s still in base58; the *renderer* substitutes aliases into it
-/// (the same division of labour as the rest of the structured views, which
-/// carry raw `Pubkey`s and let each view name them).
+/// Keeping fields *structured* (rather than one pre-joined string) lets each
+/// renderer lay them out its own way: the mermaid note joins them on one line
+/// ([`badge`](Self::badge)), the tree prints one aligned field per line. Values
+/// keep `Pubkey`s in base58; the renderer substitutes aliases (the same
+/// division of labour as the rest of the structured views).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct EventInfo {
     /// The event's display name, e.g. `Transfer`.
     pub name: String,
-    /// The formatted field body, e.g. `{ from: <pubkey>, amount: 100 }`.
-    pub fields: String,
+    /// The decoded fields as `(name, value)` pairs, in declaration order. Empty
+    /// for a field-less event.
+    pub fields: Vec<(String, String)>,
 }
 
 impl EventInfo {
-    /// The one-line badge both renderers show: `🔔 Name { fields }` (or just
-    /// `🔔 Name` when the event has no fields). Centralised here so the mermaid
-    /// note and the tree line can't drift.
+    /// The one-line badge the mermaid note shows: `🔔 Name { a: 1, b: 2 }` (or
+    /// just `🔔 Name` when the event has no fields).
     pub fn badge(&self) -> String {
-        format!("🔔 {} {}", self.name, self.fields)
-            .trim_end()
-            .to_string()
+        if self.fields.is_empty() {
+            return format!("🔔 {}", self.name);
+        }
+        let body = self
+            .fields
+            .iter()
+            .map(|(k, v)| format!("{k}: {v}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("🔔 {} {{ {body} }}", self.name)
     }
 }
 
 /// Decodes one event type's borsh body (the payload *after* the 8-byte
-/// discriminator) into its formatted fields, or `None` if the bytes don't
+/// discriminator) into its `(field, value)` pairs, or `None` if the bytes don't
 /// deserialize. `Arc` so the owning [`EventRegistry`] stays `Clone`.
-type Decoder = Arc<dyn Fn(&[u8]) -> Option<String> + Send + Sync>;
+type Decoder = Arc<dyn Fn(&[u8]) -> Option<Vec<(String, String)>> + Send + Sync>;
 
 /// A `discriminator -> (name, decoder)` table.
 ///
@@ -126,7 +134,7 @@ mod tests {
             "Ping",
             Arc::new(|b: &[u8]| {
                 let n = u64::from_le_bytes(b.try_into().ok()?);
-                Some(format!("{{ nonce: {n} }}"))
+                Some(vec![("nonce".to_string(), n.to_string())])
             }),
         );
 
@@ -134,7 +142,7 @@ mod tests {
         raw.extend_from_slice(&42u64.to_le_bytes());
         let ev = reg.decode(&b64(&raw)).expect("registered event decodes");
         assert_eq!(ev.name, "Ping");
-        assert_eq!(ev.fields, "{ nonce: 42 }");
+        assert_eq!(ev.fields, vec![("nonce".to_string(), "42".to_string())]);
         assert_eq!(ev.badge(), "🔔 Ping { nonce: 42 }");
 
         let mut other = [9u8; 8].to_vec();

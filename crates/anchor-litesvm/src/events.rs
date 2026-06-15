@@ -284,9 +284,9 @@ mod tests {
             .decode(&payload)
             .expect("registered event should decode");
         assert_eq!(info.name, "Moved");
-        // `fields` is the body only: the type name lives in `name`, so the
-        // badge reads `🔔 Moved { .. }`, not `🔔 Moved Moved { .. }`.
-        assert!(!info.fields.contains("Moved"), "name leaked into fields: {}", info.fields);
+        // Parsed into `(field, value)` pairs (the type name lives in `name`),
+        // so the badge reads `🔔 Moved { .. }`, not `🔔 Moved Moved { .. }`.
+        assert_eq!(info.fields, vec![("amount".to_string(), "42".to_string())]);
         assert_eq!(info.badge(), "🔔 Moved { amount: 42 }");
 
         // An unregistered discriminator is a clean miss, not a panic.

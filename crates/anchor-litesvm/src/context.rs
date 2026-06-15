@@ -304,24 +304,50 @@ impl AnchorContext {
             .unwrap_or("Event")
             .to_string();
 
-        // Derived `Debug` prints `Transfer { .. }`, repeating the type name the
-        // registry already stores; strip that prefix so the decoder yields the
-        // field body only and the renderers don't print the name twice.
-        let prefix = name.clone();
+        // Derived `Debug` prints `Transfer { field: val, .. }`; parse that into
+        // `(field, value)` pairs so the renderers can lay them out (the mermaid
+        // note one-line, the tree one aligned field per line). The type name is
+        // dropped (it's already stored as `name`).
         self.event_registry.register(
             disc,
             name,
             std::sync::Arc::new(move |bytes: &[u8]| {
-                E::try_from_slice(bytes).ok().map(|e| {
-                    let dbg = format!("{e:?}");
-                    match dbg.strip_prefix(&prefix) {
-                        Some(body) => body.trim_start().to_string(),
-                        None => dbg,
-                    }
-                })
+                let e = E::try_from_slice(bytes).ok()?;
+                Some(crate::event_idl::debug_to_pairs(&format!("{e:?}")))
             }),
         );
         self
+    }
+
+    /// Auto-register *every* event in `idl_json` (an Anchor IDL) for decoding,
+    /// so the structured views render the program's events by name and fields
+    /// with no per-event [`register_event`](Self::register_event) call. Embed
+    /// the IDL with `include_str!` so it travels with the test:
+    ///
+    /// ```ignore
+    /// ctx.register_events_from_idl(include_str!("../../target/idl/my_program.json"));
+    /// ```
+    ///
+    /// Fields are formatted from the IDL's type tags (`pubkey`, `u64`, ...)
+    /// rather than the event's own `Debug`; an event whose fields the decoder
+    /// can't model (a `defined` struct, an `option`, a `vec`) keeps its raw
+    /// form rather than risk a mis-aligned read. For full-`Debug` rendering of a
+    /// specific event, use [`register_event`](Self::register_event); the two
+    /// compose (a later typed registration overrides the IDL one). Panics on
+    /// invalid IDL JSON.
+    pub fn register_events_from_idl(&mut self, idl_json: &str) -> &mut Self {
+        crate::event_idl::register_all(&mut self.event_registry, idl_json);
+        self
+    }
+
+    /// Attach this context's render-context (aliases + event decoders) to a
+    /// result built off the raw `execute_*` path, so its structured views read
+    /// the same as one from [`send_ok`](Self::send_ok). The single place that
+    /// "every send carries the context's aliases and decoders" lives, so a
+    /// caller never has to hand-thread `.with_aliases(..)` (or reach for the
+    /// private event registry, which it cannot).
+    fn finish(&self, result: TransactionResult) -> TransactionResult {
+        result.with_aliases(self.aliases.clone()).with_events(self)
     }
 
     /// Send an ix expected to succeed, with structured-log aliases drawn
@@ -397,13 +423,13 @@ impl AnchorContext {
 
         // Execute the transaction
         match self.svm.send_transaction(tx) {
-            Ok(result) => Ok(TransactionResult::new(result, Some(info), message)),
-            Err(failed) => Ok(TransactionResult::new_failed(
+            Ok(result) => Ok(self.finish(TransactionResult::new(result, Some(info), message))),
+            Err(failed) => Ok(self.finish(TransactionResult::new_failed(
                 format!("{:?}", failed.err),
                 failed.meta,
                 Some(info),
                 message,
-            )),
+            ))),
         }
     }
 
@@ -431,13 +457,13 @@ impl AnchorContext {
 
         // Execute the transaction
         match self.svm.send_transaction(tx) {
-            Ok(result) => Ok(TransactionResult::new(result, None, message)),
-            Err(failed) => Ok(TransactionResult::new_failed(
+            Ok(result) => Ok(self.finish(TransactionResult::new(result, None, message))),
+            Err(failed) => Ok(self.finish(TransactionResult::new_failed(
                 format!("{:?}", failed.err),
                 failed.meta,
                 None,
                 message,
-            )),
+            ))),
         }
     }
 

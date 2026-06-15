@@ -1130,7 +1130,12 @@ sequenceDiagram
         reg.register(
             [7u8; 8],
             "Transfer",
-            Arc::new(move |_b: &[u8]| Some(format!("{{ from: {maker_b58}, amount: 100 }}"))),
+            Arc::new(move |_b: &[u8]| {
+                Some(vec![
+                    ("from".to_string(), maker_b58.clone()),
+                    ("amount".to_string(), "100".to_string()),
+                ])
+            }),
         );
         let mut raw = [7u8; 8].to_vec();
         raw.extend_from_slice(&100u64.to_le_bytes());

@@ -22,3 +22,5 @@ borsh = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 base64 = "0.22"
+# Parse an Anchor IDL to auto-register all of a program's events for decoding.
+serde_json = "1"
