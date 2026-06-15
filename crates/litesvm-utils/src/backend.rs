@@ -261,7 +261,9 @@ impl TestSVM for LiteSvmBackend {
             structured_cpi: true,
             atomic_send: true,
             fees: true,
-            instant_reset: false,
+            // In-memory: a reset is a fresh `LiteSVM`, no shared-endpoint
+            // namespacing needed.
+            instant_reset: true,
             fork: false,
         }
     }
