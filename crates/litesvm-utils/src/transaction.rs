@@ -4,12 +4,14 @@
 //! and handling their results in tests.
 
 mod aliases;
+mod events;
 mod mermaid;
 mod signers;
 mod style;
 mod tree;
 
 pub use aliases::Aliases;
+pub use events::{EventInfo, EventRegistry};
 
 use litesvm::types::TransactionMetadata;
 use litesvm::LiteSVM;
@@ -125,6 +127,12 @@ pub struct TransactionResult {
     /// `logs_structured_string`. Set via [`with_aliases`](Self::with_aliases);
     /// `None` falls back to [`Aliases::default`] (well-known programs only).
     aliases: Option<Aliases>,
+    /// Event decoders, so a `Program data:` payload renders by name and
+    /// destructured fields (a mermaid `note`, an indented tree line) instead of
+    /// raw base64. Empty until an event type is registered via
+    /// `AnchorContext::register_event`; set via
+    /// [`with_event_registry`](Self::with_event_registry).
+    event_registry: EventRegistry,
 }
 
 impl TransactionResult {
@@ -144,6 +152,7 @@ impl TransactionResult {
             error: None,
             message,
             aliases: None,
+            event_registry: EventRegistry::new(),
         }
     }
 
@@ -162,6 +171,7 @@ impl TransactionResult {
             error: Some(error),
             message,
             aliases: None,
+            event_registry: EventRegistry::new(),
         }
     }
 
@@ -172,6 +182,16 @@ impl TransactionResult {
     /// the caller keeps ownership of the original.
     pub fn with_aliases(mut self, aliases: Aliases) -> Self {
         self.aliases = Some(aliases);
+        self
+    }
+
+    /// Attach a table of event decoders so a `Program data:` payload renders by
+    /// name and fields instead of raw base64. Cloned in (cheap: the decoders
+    /// are `Arc`d); chainable. The `AnchorContext` send helpers attach the
+    /// context's registry automatically; populate it with
+    /// `AnchorContext::register_event::<E>()`. See [`EventRegistry`].
+    pub fn with_event_registry(mut self, events: EventRegistry) -> Self {
+        self.event_registry = events;
         self
     }
 
@@ -410,7 +430,7 @@ impl TransactionResult {
         // transaction's output is internally consistent (no env-flip
         // mid-render).
         let style = style::Style::detect();
-        let mut collector = tree::LegendCollector::new(aliases);
+        let mut collector = tree::LegendCollector::new(aliases, &self.event_registry);
         let mut out = String::new();
         // Leading blank line separates our header from whatever the test
         // runner just printed (test name, prior assertions, etc.).
@@ -618,7 +638,7 @@ impl TransactionResult {
         };
         let signers = signers::extract(&self.message);
         let include_logs = mermaid::detect_include_logs();
-        let mut collector = tree::LegendCollector::new(aliases);
+        let mut collector = tree::LegendCollector::new(aliases, &self.event_registry);
         mermaid::render(
             &self.inner.logs,
             &self.inner.inner_instructions,

@@ -45,15 +45,32 @@ const TREE_EMPTY: &str = "    ";
 /// [`IndexMap::entry`]`.or_insert(..)`: first-seen wins, O(1) check.
 pub(super) struct LegendCollector<'a> {
     aliases: &'a super::aliases::Aliases,
+    events: &'a super::events::EventRegistry,
     seen: IndexMap<&'a str, Pubkey>,
 }
 
 impl<'a> LegendCollector<'a> {
-    pub(super) fn new(aliases: &'a super::aliases::Aliases) -> Self {
+    pub(super) fn new(
+        aliases: &'a super::aliases::Aliases,
+        events: &'a super::events::EventRegistry,
+    ) -> Self {
         Self {
             aliases,
+            events,
             seen: IndexMap::new(),
         }
+    }
+
+    /// Decode a `Program data:` base64 payload into a named, field-formatted
+    /// event, with `Pubkey`s in the fields substituted to their aliases. `None`
+    /// when no decoder is registered for the payload's discriminator (the
+    /// renderer then keeps the raw form). The fields arrive from the decoder
+    /// with base58 keys; this is the one render-time place they're aliased,
+    /// since a decoded event is free text, not a typed `Pubkey` to resolve.
+    pub(super) fn decode_event(&self, payload: &str) -> Option<super::events::EventInfo> {
+        let mut info = self.events.decode(payload)?;
+        info.fields = self.aliases.substitute_in_text(&info.fields);
+        Some(info)
     }
 
     /// The recorded `(name, Pubkey)` pairs in insertion order.
@@ -247,6 +264,21 @@ fn render_frame(
         ancestor_prefix,
         if is_last { TREE_EMPTY } else { TREE_CONT }
     );
+
+    // Decoded events this frame emitted, as annotation lines indented under it.
+    // Only *registered* events render here; an unregistered event is a raw
+    // base64 blob with no readable form, so the tree omits it (the mermaid view
+    // keeps a raw arrow for those). Placed before children: the frame announced
+    // the event, then its sub-calls ran.
+    for entry in &frame.logs {
+        let FrameLog::Data(payload) = entry else {
+            continue;
+        };
+        let Some(info) = collector.decode_event(payload) else {
+            continue;
+        };
+        let _ = writeln!(out, "{descendant_prefix}{}", info.badge());
+    }
 
     // Order under a frame: children first (in invocation order), then
     // the failure line. Solana logs the inner CPIs before the parent's

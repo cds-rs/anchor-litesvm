@@ -1988,6 +1988,7 @@ dependencies = [
 name = "litesvm-utils"
 version = "0.4.0-anchor-0.31"
 dependencies = [
+ "base64 0.22.1",
  "indexmap",
  "litesvm",
  "proptest",

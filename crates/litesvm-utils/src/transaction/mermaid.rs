@@ -102,6 +102,14 @@ enum Line {
         target: String,
         label: String,
     },
+    /// A decoded event rendered as a `note over <emitter>` annotation rather
+    /// than an arrow: an event is something the frame *recorded*, not a message
+    /// it sent. Used when a decoder is registered; undecoded events keep the
+    /// informational [`Event`](Self::Event) arrow.
+    EventNote {
+        target: String,
+        label: String,
+    },
 }
 
 /// Maximum `event:` payload length rendered inline before truncation.
@@ -214,6 +222,9 @@ pub(super) fn render(
                     message,
                 );
             }
+            Line::EventNote { target, label } => {
+                let _ = writeln!(out, "{INDENT}note over {}: {}", mermaid_id(target), label);
+            }
             Line::CallActivate { source, target, label } => {
                 let _ = writeln!(
                     out,
@@ -278,6 +289,19 @@ fn truncate_payload(payload: &str) -> String {
         clean.to_string()
     } else {
         format!("{}…", &clean[..EVENT_LABEL_MAX])
+    }
+}
+
+/// Cap a *decoded* event label (the `🔔 Name { fields }` string) the same way
+/// [`truncate_payload`] caps a raw payload, but by `char` rather than byte: the
+/// label opens with a multibyte `🔔` and a field value may be non-ASCII, so a
+/// byte slice could land mid-codepoint and panic. Caps at [`EVENT_LABEL_MAX`]
+/// characters and suffixes with `…`.
+fn truncate_label(label: &str) -> String {
+    if label.chars().count() <= EVENT_LABEL_MAX {
+        label.to_string()
+    } else {
+        format!("{}…", label.chars().take(EVENT_LABEL_MAX).collect::<String>())
     }
 }
 
@@ -384,13 +408,26 @@ fn walk_frame(
         record_participant(root_initiator, participants);
         for entry in &frame.logs {
             match entry {
-                FrameLog::Data(payload) => {
-                    lines.push(Line::Event {
-                        source: target.clone(),
-                        target: root_initiator.to_string(),
-                        label: format!("🔔 event: {}", truncate_payload(payload)),
-                    });
-                }
+                FrameLog::Data(payload) => match collector.decode_event(payload) {
+                    // A registered event: a `note over <emitter>` carrying the
+                    // name and destructured (alias-substituted) fields. An event
+                    // is an annotation the frame recorded, not a message it sent.
+                    Some(info) => {
+                        lines.push(Line::EventNote {
+                            target: target.clone(),
+                            label: truncate_label(&info.badge()),
+                        });
+                    }
+                    // No decoder registered: keep the informational raw-base64
+                    // arrow back to the initiator, exactly as before.
+                    None => {
+                        lines.push(Line::Event {
+                            source: target.clone(),
+                            target: root_initiator.to_string(),
+                            label: format!("🔔 event: {}", truncate_payload(payload)),
+                        });
+                    }
+                },
                 FrameLog::Msg(text) if include_logs => {
                     lines.push(Line::Log {
                         source: target.clone(),
@@ -536,7 +573,9 @@ mod tests {
         mode: Mode,
         include_logs: bool,
     ) -> String {
-        let mut collector = super::super::tree::LegendCollector::new(aliases);
+        let empty_events = crate::transaction::EventRegistry::new();
+        let mut collector =
+            super::super::tree::LegendCollector::new(aliases, &empty_events);
         render(
             logs,
             inner_instructions,
@@ -1074,6 +1113,56 @@ sequenceDiagram
         assert!(
             out2.contains("escrow -->> Maker: 🔔 event: AAAAAAAAAAA="),
             "expected event arrow with logs on; got:\n{out2}"
+        );
+    }
+
+    #[test]
+    fn a_registered_event_renders_as_a_note_with_aliased_fields() {
+        use base64::{engine::general_purpose, Engine as _};
+        use std::sync::Arc;
+        let escrow_id = "H1GjRKWSauAuupurDtGiY5uvhLBtUngNhvrSBs75rH9o";
+        let maker = Pubkey::new_unique();
+
+        // A decoder whose fields embed the maker's base58 key, to prove the note
+        // substitutes it for the alias.
+        let mut reg = crate::transaction::EventRegistry::new();
+        let maker_b58 = maker.to_string();
+        reg.register(
+            [7u8; 8],
+            "Transfer",
+            Arc::new(move |_b: &[u8]| Some(format!("{{ from: {maker_b58}, amount: 100 }}"))),
+        );
+        let mut raw = [7u8; 8].to_vec();
+        raw.extend_from_slice(&100u64.to_le_bytes());
+        let payload = general_purpose::STANDARD.encode(&raw);
+
+        let logs = vec![
+            format!("Program {escrow_id} invoke [1]"),
+            "Program log: Instruction: Make".to_string(),
+            format!("Program data: {payload}"),
+            format!("Program {escrow_id} success"),
+        ];
+        let aliases = crate::Aliases::with_well_known()
+            .with(maker, "maker")
+            .with(Pubkey::from_str(escrow_id).unwrap(), "escrow");
+        let signers = SignerInfo {
+            tx_signers: vec![maker],
+            per_root: vec![vec![maker]],
+        };
+
+        let mut collector = super::super::tree::LegendCollector::new(&aliases, &reg);
+        let out = render(&logs, &Vec::new(), &mut collector, &signers, Mode::Plain, false);
+
+        // A `note over <emitter>`, not an arrow, with the decoded name...
+        assert!(
+            out.contains("note over escrow: 🔔 Transfer"),
+            "expected a decoded event note; got:\n{out}"
+        );
+        // ...and the field pubkey substituted to its alias, not raw base58.
+        assert!(out.contains("from: maker"), "alias not substituted; got:\n{out}");
+        assert!(
+            !out.contains(&maker.to_string()),
+            "raw base58 leaked into the note; got:\n{out}"
         );
     }
 

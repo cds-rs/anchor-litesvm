@@ -187,7 +187,8 @@ pub use test_helpers::TestHelpers;
 pub use token_hooks::TransferHookTesting;
 pub use tokens::{TokenFabrication, TokenProgram, TOKEN_2022_ID};
 pub use transaction::{
-    Aliases, InstructionInfo, TransactionError, TransactionHelpers, TransactionResult,
+    Aliases, EventInfo, EventRegistry, InstructionInfo, TransactionError, TransactionHelpers,
+    TransactionResult,
 };
 
 // Re-export commonly used external types

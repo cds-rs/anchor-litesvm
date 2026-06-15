@@ -3,8 +3,8 @@ use crate::program::Program;
 use anchor_lang::AccountDeserialize;
 use litesvm::LiteSVM;
 use litesvm_utils::{
-    deterministic_keypair, Aliases, InstructionInfo, TestHelpers, TransactionHelpers,
-    TransactionResult,
+    deterministic_keypair, Aliases, EventRegistry, InstructionInfo, TestHelpers,
+    TransactionHelpers, TransactionResult,
 };
 use spl_associated_token_account::get_associated_token_address;
 use std::collections::HashSet;
@@ -40,6 +40,10 @@ pub struct AnchorContext {
     /// a keypair from its name and registers an alias, so a repeated name would
     /// silently alias two casts to one identity; the cast helpers assert here.
     cast_names: HashSet<String>,
+    /// Event decoders, attached to every send so a `Program data:` payload
+    /// renders by name and destructured fields instead of raw base64. Empty
+    /// until an event type is registered via [`register_event`](Self::register_event).
+    event_registry: EventRegistry,
 }
 
 impl AnchorContext {
@@ -72,6 +76,7 @@ impl AnchorContext {
             payer,
             program,
             cast_names: HashSet::new(),
+            event_registry: EventRegistry::new(),
         }
     }
 
@@ -86,6 +91,7 @@ impl AnchorContext {
             payer,
             program,
             cast_names: HashSet::new(),
+            event_registry: EventRegistry::new(),
         }
     }
 
@@ -256,6 +262,68 @@ impl AnchorContext {
         crate::tx::Tx::new(self, signers)
     }
 
+    /// The event-decoder table registered so far. Test-only: the registry is
+    /// threaded onto every send automatically.
+    #[cfg(test)]
+    pub(crate) fn event_registry(&self) -> &EventRegistry {
+        &self.event_registry
+    }
+
+    /// Register an Anchor event type so its `emit!`ed `Program data:` payloads
+    /// render by name and destructured fields, a mermaid `note over <emitter>`
+    /// and an indented `🔔 Name { .. }` line in the structured tree, instead of
+    /// the raw base64 blob the runtime logs. Chainable; call once per event.
+    ///
+    /// The event's `Debug` output supplies the field body, and any `Pubkey`s in
+    /// it are substituted to their aliases at render time (so a registered actor
+    /// reads `from: maker`, not base58). `E` must therefore implement `Debug`;
+    /// add `#[derive(Debug)]` to the `#[event]` if it doesn't already.
+    ///
+    /// The concrete event type lives only inside the decoder closure built here:
+    /// `litesvm-utils` stores a type-erased `Fn(&[u8]) -> Option<String>` and
+    /// never names an Anchor type. The 8-byte `E::DISCRIMINATOR` is the key.
+    ///
+    /// ```ignore
+    /// ctx.register_event::<my_program::events::Transfer>();
+    /// ```
+    pub fn register_event<E>(&mut self) -> &mut Self
+    where
+        E: anchor_lang::Discriminator + anchor_lang::AnchorDeserialize + std::fmt::Debug + 'static,
+    {
+        // `Discriminator::DISCRIMINATOR` is a byte slice (8 bytes for an event);
+        // copy the leading bytes into the registry's fixed-size key.
+        let mut disc = [0u8; 8];
+        let src: &[u8] = E::DISCRIMINATOR;
+        let n = src.len().min(8);
+        disc[..n].copy_from_slice(&src[..n]);
+
+        // The display name: the last segment of the fully-qualified type name.
+        let name = std::any::type_name::<E>()
+            .rsplit("::")
+            .next()
+            .unwrap_or("Event")
+            .to_string();
+
+        // Derived `Debug` prints `Transfer { .. }`, repeating the type name the
+        // registry already stores; strip that prefix so the decoder yields the
+        // field body only and the renderers don't print the name twice.
+        let prefix = name.clone();
+        self.event_registry.register(
+            disc,
+            name,
+            std::sync::Arc::new(move |bytes: &[u8]| {
+                E::try_from_slice(bytes).ok().map(|e| {
+                    let dbg = format!("{e:?}");
+                    match dbg.strip_prefix(&prefix) {
+                        Some(body) => body.trim_start().to_string(),
+                        None => dbg,
+                    }
+                })
+            }),
+        );
+        self
+    }
+
     /// Send an ix expected to succeed, with structured-log aliases drawn
     /// from `self.aliases`. Returned [`TransactionResult`] carries the
     /// aliases internally, so `.print_logs_structured()` works with no
@@ -263,13 +331,15 @@ impl AnchorContext {
     /// [`TransactionHelpers::send_ok`](litesvm_utils::TransactionHelpers::send_ok)
     /// that removes the per-call `&Aliases` thread.
     pub fn send_ok(&mut self, ix: Instruction, signers: &[&Keypair]) -> TransactionResult {
-        self.svm.send_ok(ix, signers, &self.aliases)
+        self.svm.send_ok(ix, signers, &self.aliases).with_events(self)
     }
 
     /// Send an ix expected to fail (any error). Aliases drawn from
     /// `self.aliases`. Companion to [`send_ok`](Self::send_ok).
     pub fn send_err(&mut self, ix: Instruction, signers: &[&Keypair]) -> TransactionResult {
-        self.svm.send_err(ix, signers, &self.aliases)
+        self.svm
+            .send_err(ix, signers, &self.aliases)
+            .with_events(self)
     }
 
     /// Send an ix expected to fail with `error_name` (substring matched
@@ -283,6 +353,7 @@ impl AnchorContext {
     ) -> TransactionResult {
         self.svm
             .send_err_named(ix, signers, &self.aliases, error_name)
+            .with_events(self)
     }
 
     /// Execute a single instruction using LiteSVM
@@ -507,5 +578,21 @@ impl AnchorContext {
     /// Check if an account exists
     pub fn account_exists(&self, pubkey: &Pubkey) -> bool {
         self.svm.get_account(pubkey).is_some()
+    }
+}
+
+/// Fluent decorator letting a freshly-sent [`TransactionResult`] inherit a
+/// context's event decoders inside a `send_*` chain
+/// (`...send_ok(...).with_events(self)`), so the "every send carries the
+/// context's decoders" decision lives in one place, the twin of how the send
+/// itself receives `&self.aliases`. Private: it exists only to keep the send
+/// helpers DRY without breaking their fluent shape.
+trait WithContextEvents {
+    fn with_events(self, ctx: &AnchorContext) -> Self;
+}
+
+impl WithContextEvents for TransactionResult {
+    fn with_events(self, ctx: &AnchorContext) -> Self {
+        self.with_event_registry(ctx.event_registry.clone())
     }
 }

@@ -92,6 +92,22 @@ impl Aliases {
             .map(str::to_string)
             .unwrap_or_else(|| short_pubkey(pubkey))
     }
+
+    /// Replace every registered key's base58 string with its alias name,
+    /// wherever it appears in `text`.
+    ///
+    /// Built for free-form text the renderer can't pre-resolve into `Pubkey`s:
+    /// a decoded event's `{:?}` field body, where a key arrives as a base58
+    /// substring (`from: 5xY8...`) rather than a typed `Pubkey` to `label`. A
+    /// base58 key is 32+ unique characters, so a plain substring replace can't
+    /// collide with anything else in the text.
+    pub fn substitute_in_text(&self, text: &str) -> String {
+        let mut out = text.to_string();
+        for (pubkey, name) in &self.by_pubkey {
+            out = out.replace(&pubkey.to_string(), name);
+        }
+        out
+    }
 }
 
 /// `<first 8>…<last 4>` of the base58 key (keys of 12 chars or fewer are

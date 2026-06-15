@@ -17,7 +17,8 @@ fn render_with(
     aliases: &crate::Aliases,
     signers: &crate::transaction::signers::SignerInfo,
 ) -> String {
-    let mut collector = LegendCollector::new(aliases);
+    let empty_events = crate::transaction::EventRegistry::new();
+    let mut collector = LegendCollector::new(aliases, &empty_events);
     render(
         logs,
         inner_instructions,

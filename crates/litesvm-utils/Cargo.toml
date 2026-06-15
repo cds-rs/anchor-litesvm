@@ -24,6 +24,9 @@ spl-associated-token-account = { workspace = true }
 spl-transfer-hook-interface = { workspace = true }
 indexmap = "2.12"
 thiserror = { workspace = true }
+# Decode `Program data:` event payloads (base64) so registered Anchor events
+# render by name and fields instead of raw blobs.
+base64 = "0.22"
 
 [dev-dependencies]
 proptest = "1.5"
