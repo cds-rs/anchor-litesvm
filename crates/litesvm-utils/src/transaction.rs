@@ -524,6 +524,11 @@ impl TransactionResult {
     /// authority story holds the analogous per-submit value across a test.
     pub(in crate::transaction) fn model(&self) -> model::CpiModel {
         let signers = signers::extract(&self.message);
+        let vocab = model::Vocab {
+            instructions: &self.instruction_names,
+            errors: &self.error_names,
+            events: &self.event_registry,
+        };
         let mut model = model::build(
             self.instruction.as_ref(),
             &self.inner.logs,
@@ -533,14 +538,10 @@ impl TransactionResult {
             self.error.clone(),
             self.compute_units(),
             self.fee(),
-            model::Vocab {
-                instructions: &self.instruction_names,
-                errors: &self.error_names,
-                events: &self.event_registry,
-            },
+            vocab,
         );
         if let Some(trace) = &self.instruction_trace {
-            model::fill_from_trace(&mut model, trace);
+            model::fill_from_trace(&mut model, trace, vocab);
         }
         model
     }

@@ -406,16 +406,17 @@ fn fill_frame_owners(frame: &mut ResolvedFrame, lookup: &impl Fn(&Pubkey) -> Opt
 /// order); within a frame, accounts are matched by pubkey. A frame the trace
 /// doesn't cover keeps its message-derived flags, so a desync degrades
 /// gracefully rather than corrupting.
-pub(super) fn fill_from_trace(model: &mut CpiModel, trace: &InstructionTrace) {
+pub(super) fn fill_from_trace(model: &mut CpiModel, trace: &InstructionTrace, vocab: Vocab<'_>) {
     let mut frames = trace.0.iter();
     for root in &mut model.roots {
-        fill_frame_from_trace(&mut root.frame, &mut frames);
+        fill_frame_from_trace(&mut root.frame, &mut frames, vocab);
     }
 }
 
 fn fill_frame_from_trace<'a>(
     frame: &mut ResolvedFrame,
     frames: &mut impl Iterator<Item = &'a TracedInstruction>,
+    vocab: Vocab<'_>,
 ) {
     if let Some(traced) = frames.next() {
         for acct in &mut frame.accounts {
@@ -428,9 +429,19 @@ fn fill_frame_from_trace<'a>(
         // The trace is the only carrier of an inner frame's instruction data
         // (logs don't have it); the tree renderer decodes self-CPI events from it.
         frame.data = traced.data.clone();
+        // On the engine-neutral backend path `inner_instructions` is empty, so
+        // `resolve_frame` never gets to name a CPI child; the trace is the only
+        // place the inner data surfaces. Resolve the name here too, with the same
+        // resolver (built-in System/Token/ATA decoders, then the registry), so an
+        // inner `Transfer` / `CreateAccount` names itself instead of rendering as
+        // `unnamed`. Only when the build path left it open, so a log-derived or
+        // discriminator-decoded name is never shadowed.
+        if frame.instruction_name.is_none() {
+            frame.instruction_name = resolve_name(vocab.instructions, &frame.program, &traced.data);
+        }
     }
     for child in &mut frame.children {
-        fill_frame_from_trace(child, frames);
+        fill_frame_from_trace(child, frames, vocab);
     }
 }
 

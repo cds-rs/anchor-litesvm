@@ -192,3 +192,95 @@ fn extract_anchor_error_name_returns_first_when_multiple() {
         Some("FirstError")
     );
 }
+
+#[test]
+fn fill_from_trace_names_inner_native_frames_and_never_shadows() {
+    use {
+        crate::transaction::{
+            ErrorNames, EventRegistry, InstructionNames, InstructionTrace, TracedInstruction,
+        },
+        solana_program::pubkey::Pubkey,
+    };
+
+    // The engine-neutral backend path leaves `inner_instructions` empty, so the
+    // inner System frame reaches `fill_from_trace` with no name. The trace is
+    // the only carrier of its data; the System program id is the all-zero key.
+    let program = Pubkey::new_unique();
+    let system = Pubkey::default();
+
+    let mut model = CpiModel {
+        header: None,
+        roots: vec![Root {
+            signers: vec![],
+            frame: ResolvedFrame {
+                program,
+                // A name the build path already resolved (a log-derived or
+                // discriminator-decoded one). The trace pass must not shadow it.
+                instruction_name: Some("Withdraw".into()),
+                outcome: Outcome::Success,
+                compute_units: None,
+                accounts: vec![],
+                logs: vec![],
+                data: vec![],
+                children: vec![ResolvedFrame {
+                    program: system,
+                    // The unnamed inner frame this fix targets.
+                    instruction_name: None,
+                    outcome: Outcome::Success,
+                    compute_units: None,
+                    accounts: vec![],
+                    logs: vec![],
+                    data: vec![],
+                    children: vec![],
+                }],
+            },
+        }],
+        tx_signers: vec![],
+        error: None,
+        compute_units: 0,
+        fee: 0,
+        events: Default::default(),
+    };
+
+    // Flat DFS trace: the program root, then its System `CreateAccount` CPI
+    // (4-byte u32 LE tag 0).
+    let trace = InstructionTrace(vec![
+        TracedInstruction {
+            program_id: program,
+            stack_height: 1,
+            accounts: vec![],
+            data: vec![9, 9, 9, 9],
+        },
+        TracedInstruction {
+            program_id: system,
+            stack_height: 2,
+            accounts: vec![],
+            data: vec![0, 0, 0, 0],
+        },
+    ]);
+
+    let instructions = InstructionNames::default();
+    let errors = ErrorNames::default();
+    let events = EventRegistry::default();
+    let vocab = Vocab {
+        instructions: &instructions,
+        errors: &errors,
+        events: &events,
+    };
+
+    fill_from_trace(&mut model, &trace, vocab);
+
+    let root = &model.roots[0].frame;
+    // The build-path name survives: the trace pass only fills an open name.
+    assert_eq!(
+        root.instruction_name.as_deref(),
+        Some("Withdraw"),
+        "an already-resolved frame name must not be shadowed by the trace pass"
+    );
+    // The inner System frame, formerly `unnamed`, now decodes from its data.
+    assert_eq!(
+        root.children[0].instruction_name.as_deref(),
+        Some("CreateAccount"),
+        "the inner native-program frame should resolve its name from the traced data"
+    );
+}
