@@ -216,10 +216,40 @@ pub trait TestSVM {
     /// default body is a no-op; an engine that doesn't surface events ignores it.
     fn register_event_decoder(
         &mut self,
-        _discriminator: [u8; 8],
+        discriminator: [u8; 8],
+        name: &str,
+        decode: crate::events::EventDecoder,
+    ) {
+        // The fixed-8-byte spelling is a special case of the variable-width
+        // socket; route there so an adapter need only override one of them.
+        self.register_logged_event(&discriminator, name, decode);
+    }
+
+    /// Register a logged-event decoder by a leading-byte discriminator of ANY
+    /// width: Anchor's 8-byte name hash, Quasar's single byte, Shank's one byte.
+    /// The general socket behind [`register_event`](Self::register_event) and the
+    /// fixed-width [`register_event_decoder`](Self::register_event_decoder).
+    /// Adapters that hold an [`EventRegistry`](crate::events::EventRegistry) store
+    /// it via [`register_logged`](crate::events::EventRegistry::register_logged);
+    /// the default is a no-op.
+    fn register_logged_event(
+        &mut self,
+        _prefix: &[u8],
         _name: &str,
         _decode: crate::events::EventDecoder,
     ) {
+    }
+
+    /// Register a typed logged event from its [`DecodableEvent`](crate::events::DecodableEvent)
+    /// impl: the discriminator width, the name, and the field decoder all come
+    /// off `E`, so neither the adapter nor the test restates the scheme. Sugar
+    /// over [`register_logged_event`](Self::register_logged_event).
+    fn register_event<E: crate::events::DecodableEvent>(&mut self)
+    where
+        Self: Sized,
+    {
+        let decode: fn(&[u8]) -> Option<Vec<(String, String)>> = E::decode;
+        self.register_logged_event(E::DISCRIMINATOR, E::name(), std::sync::Arc::new(decode));
     }
 
     /// Register a decoder for a *self-CPI* event (`emit_cpi!`, and compatible

@@ -20,9 +20,10 @@
 //! ## Two emission shapes
 //!
 //! - **Logged** (`emit!`): the runtime writes `Program data: <base64>` where the
-//!   bytes are `discriminator(8) ++ borsh`. The base64 framing is a log-format
-//!   detail the renderer strips; this registry decodes the resulting bytes via
-//!   [`decode_bytes`](EventRegistry::decode_bytes).
+//!   bytes are `discriminator ++ body`. The discriminator is a leading-byte tag
+//!   of framework-specific width (Anchor's 8-byte name hash, Quasar's single
+//!   byte); the registry strips the base64 and resolves it via
+//!   [`decode_logged`](EventRegistry::decode_logged) / [`decode_bytes`](EventRegistry::decode_bytes).
 //! - **Self-CPI** (`emit_cpi!`, and compatible hand-rolled engines): the program
 //!   invokes itself with `tag ++ disc ++ borsh` as the instruction data, leaving
 //!   no log. The payload is the inner instruction's data, which the execution
@@ -50,16 +51,32 @@ pub struct EventInfo {
 }
 
 impl EventInfo {
-    /// The one-line badge the mermaid note shows: `🔔 Name { a: 1, b: 2 }` (or
-    /// just `🔔 Name` when the event has no fields).
+    /// The one-line badge: `🔔 Name { a: 1, b: 2 }` (or just `🔔 Name` when the
+    /// event has no fields). Field values render verbatim; pubkey-valued fields
+    /// keep their base58. [`badge_resolved`](Self::badge_resolved) is the
+    /// alias-aware form.
     pub fn badge(&self) -> String {
+        self.badge_resolved(&|pk| pk.to_string())
+    }
+
+    /// The badge with every pubkey-valued field run through `label`: a field
+    /// whose value parses as a `Pubkey` renders as its alias (`escrow: Escrow`)
+    /// instead of raw base58, exactly as the surrounding tree names program ids.
+    /// A non-pubkey value (a number, a flag) is left as the decoder wrote it.
+    pub fn badge_resolved(&self, label: &dyn Fn(&Pubkey) -> String) -> String {
         if self.fields.is_empty() {
             return format!("🔔 {}", self.name);
         }
         let body = self
             .fields
             .iter()
-            .map(|(k, v)| format!("{k}: {v}"))
+            .map(|(k, v)| {
+                let rendered = v
+                    .parse::<Pubkey>()
+                    .map(|pk| label(&pk))
+                    .unwrap_or_else(|_| v.clone());
+                format!("{k}: {rendered}")
+            })
             .collect::<Vec<_>>()
             .join(", ");
         format!("🔔 {} {{ {body} }}", self.name)
@@ -80,9 +97,11 @@ pub type EventDecoder = Arc<dyn Fn(&[u8]) -> Option<Vec<(String, String)>> + Sen
 /// sockets `register_event_decoder` / `register_cpi_event`.
 #[derive(Clone, Default)]
 pub struct EventRegistry {
-    // Logged events key on the 8-byte discriminator alone: Anchor derives it
-    // from the event name, so it is effectively unique across programs.
-    by_discriminator: HashMap<[u8; 8], (String, EventDecoder)>,
+    // Logged events key on a leading-byte discriminator of *any* width: Anchor's
+    // is 8 bytes (a name hash), Quasar's and Shank's are a single byte. Storing
+    // the prefix as `Vec<u8>` (not a fixed `[u8; 8]`) is what lets one registry
+    // speak every framework's scheme; `decode_bytes` resolves by longest match.
+    logged_by_prefix: Vec<(Vec<u8>, String, EventDecoder)>,
     // Self-CPI events key on `(program, prefix)`: the prefix is a *shared* tag
     // (`Sha256("anchor:event")[..8]`) plus a short discriminator, so the same
     // prefix recurs across programs. Keying by the emitting program keeps a
@@ -96,10 +115,25 @@ pub struct EventRegistry {
 impl std::fmt::Debug for EventRegistry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("EventRegistry")
-            .field("logged", &self.by_discriminator.len())
+            .field("logged", &self.logged_by_prefix.len())
             .field("cpi", &self.cpi_by_prefix.len())
             .finish()
     }
+}
+
+/// A typed logged-event the registry can decode: its leading-byte discriminator,
+/// its display name, and how to turn the bytes *after* the discriminator into
+/// `(field, value)` pairs. This is the "decoder as one object" contract: a
+/// framework ships an `impl DecodableEvent` per event (Anchor with an 8-byte
+/// `DISCRIMINATOR`, Quasar with a 1-byte one), and [`register_event`](EventRegistry::register_event)
+/// wires it in without the caller restating the width.
+pub trait DecodableEvent {
+    /// The leading bytes a `Program data:` payload carries for this event.
+    const DISCRIMINATOR: &'static [u8];
+    /// The event's display name, e.g. `MakeEvent`.
+    fn name() -> &'static str;
+    /// Decode the bytes that follow the discriminator into its fields.
+    fn decode(body: &[u8]) -> Option<Vec<(String, String)>>;
 }
 
 impl EventRegistry {
@@ -108,18 +142,42 @@ impl EventRegistry {
         Self::default()
     }
 
-    /// Register a logged event: `discriminator -> (name, decoder)`. The
-    /// discriminator is the event's 8-byte leading tag; `decode` takes the bytes
-    /// that follow it.
+    /// Register a logged event by its leading-byte discriminator of any width;
+    /// `decode` takes the bytes that follow it. The general primitive the typed
+    /// [`register_event`](Self::register_event) and the 8-byte
+    /// [`register`](Self::register) sit on.
+    pub fn register_logged(
+        &mut self,
+        discriminator: impl Into<Vec<u8>>,
+        name: impl Into<String>,
+        decode: EventDecoder,
+    ) -> &mut Self {
+        self.logged_by_prefix
+            .push((discriminator.into(), name.into(), decode));
+        self
+    }
+
+    /// Register a typed logged event from its [`DecodableEvent`] impl: the
+    /// discriminator width, name, and field decoder all come off `E`, so a
+    /// framework's events register with no scheme restated at the call site.
+    pub fn register_event<E: DecodableEvent>(&mut self) -> &mut Self {
+        // Coerce the associated fn to a plain fn pointer so the boxed decoder is
+        // `'static` without bounding `E` (event markers are zero-sized anyway).
+        let decode: fn(&[u8]) -> Option<Vec<(String, String)>> = E::decode;
+        self.register_logged(E::DISCRIMINATOR, E::name(), Arc::new(decode))
+    }
+
+    /// Register a logged event keyed on an 8-byte discriminator (Anchor's
+    /// scheme): sugar for [`register_logged`](Self::register_logged) with a
+    /// fixed-width tag. Kept so the Anchor `register_event::<T>` bridge stays a
+    /// one-liner.
     pub fn register(
         &mut self,
         discriminator: [u8; 8],
         name: impl Into<String>,
         decode: EventDecoder,
     ) -> &mut Self {
-        self.by_discriminator
-            .insert(discriminator, (name.into(), decode));
-        self
+        self.register_logged(discriminator.to_vec(), name, decode)
     }
 
     /// Register a *self-CPI* event decoder for `program`, keyed by the leading
@@ -139,19 +197,36 @@ impl EventRegistry {
         self
     }
 
-    /// Decode a logged event from its raw bytes (`discriminator(8) ++ body`),
-    /// or `None` when too short to carry a discriminator or carrying one we have
-    /// no decoder for (a clean miss, never a panic). The base64 framing of a
-    /// `Program data:` line is the renderer's concern; this takes the decoded
-    /// bytes.
+    /// Decode a logged event from its raw bytes (`discriminator ++ body`), or
+    /// `None` when no registered prefix matches or the body doesn't deserialize
+    /// (a clean miss, never a panic). Resolves by *longest* matching prefix, so
+    /// a 1-byte scheme and an 8-byte scheme can coexist without a short prefix
+    /// shadowing a longer one. The base64 framing of a `Program data:` line is
+    /// [`decode_logged`](Self::decode_logged)'s concern; this takes the bytes.
     pub fn decode_bytes(&self, bytes: &[u8]) -> Option<EventInfo> {
-        let (disc, body) = bytes.split_first_chunk::<8>()?;
-        let (name, decode) = self.by_discriminator.get(disc)?;
-        let fields = decode(body)?;
+        let (prefix, name, decode) = self
+            .logged_by_prefix
+            .iter()
+            .filter(|(prefix, _, _)| bytes.starts_with(prefix))
+            .max_by_key(|(prefix, _, _)| prefix.len())?;
+        let fields = decode(&bytes[prefix.len()..])?;
         Some(EventInfo {
             name: name.clone(),
             fields,
         })
+    }
+
+    /// Decode a logged event straight from a `Program data:` line's base64
+    /// payload: strip the framing, then [`decode_bytes`](Self::decode_bytes).
+    /// `None` when the payload isn't valid base64 or carries no registered
+    /// event. Lives here (not in a renderer) so every engine's tree inherits
+    /// event rendering, not just the litesvm one.
+    pub fn decode_logged(&self, payload_b64: &str) -> Option<EventInfo> {
+        use base64::Engine as _;
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(payload_b64.trim())
+            .ok()?;
+        self.decode_bytes(&bytes)
     }
 
     /// Decode a self-CPI event emitted by `program` from an inner instruction's
@@ -178,7 +253,7 @@ impl EventRegistry {
     /// Whether any logged-event decoder is registered. Renderers use this to
     /// skip the decode attempt when none were.
     pub fn is_empty(&self) -> bool {
-        self.by_discriminator.is_empty()
+        self.logged_by_prefix.is_empty()
     }
 
     /// Whether any self-CPI event decoder is registered.

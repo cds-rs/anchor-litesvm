@@ -328,17 +328,31 @@ pub fn format_cpi_tree(header: &str, frames: &[Frame]) -> String {
 
 /// testsvm extension (not in the vendored upstream): the same tree with a
 /// caller-supplied labeler, so program ids render through the alias
-/// vocabulary (`Aliases::label`) instead of raw base58.
+/// vocabulary (`Aliases::label`) instead of raw base58. Decodes no events (an
+/// empty registry); [`format_cpi_tree_with_events`] is the event-aware form.
 pub fn format_cpi_tree_labeled(
     header: &str,
     frames: &[Frame],
     labeler: &dyn Fn(&Pubkey) -> String,
 ) -> String {
+    format_cpi_tree_with_events(header, frames, labeler, &crate::events::EventRegistry::new())
+}
+
+/// The event-aware tree: `Program data:` rows decode through `events` and
+/// render as `🔔 Name { .. }` badges where a decoder matches, falling back to
+/// the raw `>> data:` payload otherwise. An empty registry reproduces
+/// [`format_cpi_tree_labeled`] byte for byte.
+pub fn format_cpi_tree_with_events(
+    header: &str,
+    frames: &[Frame],
+    labeler: &dyn Fn(&Pubkey) -> String,
+    events: &crate::events::EventRegistry,
+) -> String {
     let mut out = String::new();
     writeln!(out, "{header}").unwrap();
     let last_idx = frames.len().saturating_sub(1);
     for (i, frame) in frames.iter().enumerate() {
-        write_frame(&mut out, frame, "", i == last_idx, true, labeler);
+        write_frame(&mut out, frame, "", i == last_idx, true, labeler, events);
     }
     out
 }
@@ -350,6 +364,7 @@ fn write_frame(
     is_last: bool,
     is_root: bool,
     labeler: &dyn Fn(&Pubkey) -> String,
+    events: &crate::events::EventRegistry,
 ) {
     let connector = if is_last { CONN_LAST } else { CONN_BRANCH };
     write!(out, "{prefix}{connector}").unwrap();
@@ -398,14 +413,20 @@ fn write_frame(
             FrameLog::Msg(text) => {
                 writeln!(out, "{child_prefix}{log_spine}>> log:  {text}").unwrap();
             }
-            FrameLog::Data(payload) => {
-                writeln!(out, "{child_prefix}{log_spine}>> data: {payload}").unwrap();
-            }
+            FrameLog::Data(payload) => match events.decode_logged(payload) {
+                Some(info) => {
+                    let badge = info.badge_resolved(labeler);
+                    writeln!(out, "{child_prefix}{log_spine}{badge}").unwrap();
+                }
+                None => {
+                    writeln!(out, "{child_prefix}{log_spine}>> data: {payload}").unwrap();
+                }
+            },
         }
     }
     let last_idx = frame.children.len().saturating_sub(1);
     for (i, child) in frame.children.iter().enumerate() {
-        write_frame(out, child, &child_prefix, i == last_idx, false, labeler);
+        write_frame(out, child, &child_prefix, i == last_idx, false, labeler, events);
     }
 }
 

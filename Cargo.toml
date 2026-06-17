@@ -14,6 +14,10 @@ exclude = [
     # and the litesvm graph (solana 3.4 pins) cannot share one lock. Same
     # test, different backend, rebuild — applied to the workspace.
     "crates/testsvm-mollusk",
+    # Same reasoning: quasar-svm carries the full Agave internals
+    # (solana-program-runtime, solana-bpf-loader, agave-syscalls), which share a
+    # lock with neither the litesvm nor the mollusk graph.
+    "crates/testsvm-quasar",
 ]
 
 [workspace.package]

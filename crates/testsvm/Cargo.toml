@@ -23,3 +23,7 @@ solana-signer = "3.0"
 # Conformance scenario builds a System transfer. 3.1 floor: 3.2 requires
 # solana-instruction ^3.4, which a mollusk graph cannot hold.
 solana-system-interface = { version = "3.1", features = ["bincode"] }
+# Logged events arrive base64-framed on `Program data:` lines; decoding them in
+# the engine-neutral renderer (so every engine's tree gets 🔔, not just litesvm)
+# means the base64 strip lives here now. Thin, pins no solana version.
+base64 = "0.22"

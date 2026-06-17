@@ -115,7 +115,7 @@ impl Transaction {
             ),
             _ => "CPI Tree (no compute units in logs):".to_string(),
         };
-        crate::frame::format_cpi_tree_labeled(&header, &self.frames, &label)
+        crate::frame::format_cpi_tree_with_events(&header, &self.frames, &label, &self.events)
     }
 }
 
