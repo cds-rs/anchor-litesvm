@@ -128,6 +128,50 @@ impl Aliases {
     }
 }
 
+/// The naming capability every renderer depends on: turn a pubkey into its
+/// display form, and resolve the pubkeys embedded in a piece of free text.
+///
+/// Three renderers need this (the engine-neutral CPI tree, the litesvm tree,
+/// the mermaid view), so it is a named contract rather than a closure threaded
+/// here and a `substitute_in_text` call reached for there: a consumer takes
+/// `&dyn Labeler` and never has to know whether the names come from an
+/// [`Aliases`] table or anything else. [`Aliases`] is the production impl;
+/// [`RawLabeler`] is the no-aliases identity.
+///
+/// Two methods because there are two shapes of value: a typed program id is a
+/// `Pubkey` ([`label`](Labeler::label)); a decoded event field is free text
+/// that may carry a base58 key as a substring
+/// ([`substitute_in_text`](Labeler::substitute_in_text)).
+pub trait Labeler {
+    /// The display form of `pubkey`: its registered name, or a short fallback.
+    fn label(&self, pubkey: &Pubkey) -> String;
+    /// The text with every embedded base58 key replaced by its name.
+    fn substitute_in_text(&self, text: &str) -> String;
+}
+
+impl Labeler for Aliases {
+    fn label(&self, pubkey: &Pubkey) -> String {
+        Aliases::label(self, pubkey)
+    }
+    fn substitute_in_text(&self, text: &str) -> String {
+        Aliases::substitute_in_text(self, text)
+    }
+}
+
+/// The identity labeler: a pubkey renders as its base58, free text passes
+/// through unchanged. The fallback when no alias table is in play (the bare
+/// [`format_cpi_tree`](crate::frame::format_cpi_tree)).
+pub struct RawLabeler;
+
+impl Labeler for RawLabeler {
+    fn label(&self, pubkey: &Pubkey) -> String {
+        pubkey.to_string()
+    }
+    fn substitute_in_text(&self, text: &str) -> String {
+        text.to_string()
+    }
+}
+
 /// `<first 8>…<last 4>` of the base58 key (keys of 12 chars or fewer are
 /// left whole). Shared by the structured-tree renderer and
 /// [`Aliases::label`] so an unaliased key reads the same everywhere.

@@ -103,7 +103,6 @@ impl Transaction {
         // CU and the budget, or an explicit no-data note. Never "0 CU":
         // native programs don't emit `consumed` lines, and reporting that
         // absence as zero would misstate the cost.
-        let label = |pk: &solana_pubkey::Pubkey| self.aliases.label(pk);
         let header = match (
             transaction_total_cu(&self.frames),
             transaction_compute_budget(&self.frames),
@@ -115,7 +114,7 @@ impl Transaction {
             ),
             _ => "CPI Tree (no compute units in logs):".to_string(),
         };
-        crate::frame::format_cpi_tree_with_events(&header, &self.frames, &label, &self.events)
+        crate::frame::format_cpi_tree_with_events(&header, &self.frames, &self.aliases, &self.events)
     }
 }
 

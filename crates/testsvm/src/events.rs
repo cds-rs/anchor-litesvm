@@ -52,34 +52,41 @@ pub struct EventInfo {
 
 impl EventInfo {
     /// The one-line badge: `🔔 Name { a: 1, b: 2 }` (or just `🔔 Name` when the
-    /// event has no fields). Field values render verbatim; pubkey-valued fields
-    /// keep their base58. [`badge_resolved`](Self::badge_resolved) is the
-    /// alias-aware form.
+    /// event has no fields). Field values render verbatim;
+    /// [`badge_resolved`](Self::badge_resolved) is the alias-aware form.
     pub fn badge(&self) -> String {
-        self.badge_resolved(&|pk| pk.to_string())
-    }
-
-    /// The badge with every pubkey-valued field run through `label`: a field
-    /// whose value parses as a `Pubkey` renders as its alias (`escrow: Escrow`)
-    /// instead of raw base58, exactly as the surrounding tree names program ids.
-    /// A non-pubkey value (a number, a flag) is left as the decoder wrote it.
-    pub fn badge_resolved(&self, label: &dyn Fn(&Pubkey) -> String) -> String {
         if self.fields.is_empty() {
             return format!("🔔 {}", self.name);
         }
         let body = self
             .fields
             .iter()
-            .map(|(k, v)| {
-                let rendered = v
-                    .parse::<Pubkey>()
-                    .map(|pk| label(&pk))
-                    .unwrap_or_else(|_| v.clone());
-                format!("{k}: {rendered}")
-            })
+            .map(|(k, v)| format!("{k}: {v}"))
             .collect::<Vec<_>>()
             .join(", ");
         format!("🔔 {} {{ {body} }}", self.name)
+    }
+
+    /// This event with every field value resolved through `labeler`: a base58
+    /// key in a field (a lone `escrow` pubkey, or one embedded in a `{:?}`
+    /// body) becomes its alias. The single place event fields are named, so the
+    /// engine-neutral tree and the litesvm renderers resolve them identically
+    /// instead of each reaching for an alias table its own way.
+    pub fn resolved(&self, labeler: &dyn crate::aliases::Labeler) -> EventInfo {
+        EventInfo {
+            name: self.name.clone(),
+            fields: self
+                .fields
+                .iter()
+                .map(|(k, v)| (k.clone(), labeler.substitute_in_text(v)))
+                .collect(),
+        }
+    }
+
+    /// The badge with every field resolved through `labeler`, so an event reads
+    /// `🔔 MakeEvent { escrow: Escrow, .. }` instead of base58.
+    pub fn badge_resolved(&self, labeler: &dyn crate::aliases::Labeler) -> String {
+        self.resolved(labeler).badge()
     }
 }
 

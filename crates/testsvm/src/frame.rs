@@ -323,17 +323,17 @@ fn classify(log: &str) -> LogLine {
 /// a visible parent so a transaction's multiple top-level frames read as
 /// siblings rather than flush-left strangers.
 pub fn format_cpi_tree(header: &str, frames: &[Frame]) -> String {
-    format_cpi_tree_labeled(header, frames, &|pk| pk.to_string())
+    format_cpi_tree_labeled(header, frames, &crate::aliases::RawLabeler)
 }
 
 /// testsvm extension (not in the vendored upstream): the same tree with a
-/// caller-supplied labeler, so program ids render through the alias
-/// vocabulary (`Aliases::label`) instead of raw base58. Decodes no events (an
+/// caller-supplied [`Labeler`](crate::aliases::Labeler), so program ids render
+/// through the alias vocabulary instead of raw base58. Decodes no events (an
 /// empty registry); [`format_cpi_tree_with_events`] is the event-aware form.
 pub fn format_cpi_tree_labeled(
     header: &str,
     frames: &[Frame],
-    labeler: &dyn Fn(&Pubkey) -> String,
+    labeler: &dyn crate::aliases::Labeler,
 ) -> String {
     format_cpi_tree_with_events(header, frames, labeler, &crate::events::EventRegistry::new())
 }
@@ -345,7 +345,7 @@ pub fn format_cpi_tree_labeled(
 pub fn format_cpi_tree_with_events(
     header: &str,
     frames: &[Frame],
-    labeler: &dyn Fn(&Pubkey) -> String,
+    labeler: &dyn crate::aliases::Labeler,
     events: &crate::events::EventRegistry,
 ) -> String {
     let mut out = String::new();
@@ -363,7 +363,7 @@ fn write_frame(
     prefix: &str,
     is_last: bool,
     is_root: bool,
-    labeler: &dyn Fn(&Pubkey) -> String,
+    labeler: &dyn crate::aliases::Labeler,
     events: &crate::events::EventRegistry,
 ) {
     let connector = if is_last { CONN_LAST } else { CONN_BRANCH };
@@ -391,9 +391,9 @@ fn write_frame(
     // Tree" over a single node otherwise reads contradictory. Children that
     // are leaves stay unannotated (most CPIs are leaves; that's the norm).
     if is_root && frame.children.is_empty() {
-        writeln!(out, "{} (no CPIs)", labeler(&frame.program_id)).unwrap();
+        writeln!(out, "{} (no CPIs)", labeler.label(&frame.program_id)).unwrap();
     } else {
-        writeln!(out, "{}", labeler(&frame.program_id)).unwrap();
+        writeln!(out, "{}", labeler.label(&frame.program_id)).unwrap();
     }
 
     let child_prefix = if is_last {

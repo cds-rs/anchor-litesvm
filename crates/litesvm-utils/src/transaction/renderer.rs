@@ -64,11 +64,7 @@ impl<'a> LegendCollector<'a> {
     /// since a decoded event is free text, not the typed `Pubkey`s the rest of
     /// the model carries.
     pub(super) fn decode_event(&self, payload: &str) -> Option<EventInfo> {
-        let mut info = super::events::decode_program_data(self.events, payload)?;
-        for (_, value) in &mut info.fields {
-            *value = self.aliases.substitute_in_text(value);
-        }
-        Some(info)
+        Some(super::events::decode_program_data(self.events, payload)?.resolved(self.aliases))
     }
 
     /// Decode a *self-CPI* event from an inner frame's raw instruction `data`
@@ -76,11 +72,7 @@ impl<'a> LegendCollector<'a> {
     /// the inner instruction's data, which the trace carries onto the frame).
     /// Fields are alias-substituted exactly as in [`decode_event`](Self::decode_event).
     pub(super) fn decode_cpi_event(&self, program: &Pubkey, data: &[u8]) -> Option<EventInfo> {
-        let mut info = self.events.decode_cpi(program, data)?;
-        for (_, value) in &mut info.fields {
-            *value = self.aliases.substitute_in_text(value);
-        }
-        Some(info)
+        Some(self.events.decode_cpi(program, data)?.resolved(self.aliases))
     }
 
 
