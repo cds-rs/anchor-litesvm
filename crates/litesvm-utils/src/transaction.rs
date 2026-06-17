@@ -9,6 +9,7 @@ mod authority;
 mod authority_story;
 mod error_names;
 mod events;
+mod graph;
 mod instruction_names;
 mod mermaid;
 mod model;

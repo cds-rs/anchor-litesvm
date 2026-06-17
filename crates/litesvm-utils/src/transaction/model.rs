@@ -80,10 +80,22 @@ impl CpiModel {
     /// [`resolve_custom_error`] during the build and lands here, even though it
     /// never appears in the raw logs or the runtime error field.
     pub(super) fn failure_messages(&self) -> Vec<String> {
-        fn walk(frame: &ResolvedFrame, out: &mut Vec<String>) {
-            if let Outcome::Failed { message: Some(m) } = &frame.outcome {
-                out.push(m.clone());
-            }
+        self.frames()
+            .into_iter()
+            .filter_map(|frame| match &frame.outcome {
+                Outcome::Failed { message: Some(m) } => Some(m.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Every frame in the model, DFS pre-order (each root, then its children).
+    /// The one traversal the graph and census renderers share, instead of each
+    /// re-walking `roots`/`children`: consumers map or filter the flat list as
+    /// they need (failure messages, the per-account graphs, the index census).
+    pub(super) fn frames(&self) -> Vec<&ResolvedFrame> {
+        fn walk<'a>(frame: &'a ResolvedFrame, out: &mut Vec<&'a ResolvedFrame>) {
+            out.push(frame);
             for child in &frame.children {
                 walk(child, out);
             }

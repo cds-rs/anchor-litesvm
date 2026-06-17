@@ -70,7 +70,7 @@ use {
     super::{
         aliases::Aliases,
         mermaid::{mermaid_id, INDENT},
-        model::{CpiModel, Outcome, ResolvedFrame},
+        model::{CpiModel, Outcome},
         TransactionResult,
     },
     crate::report::{MarkdownBlock, ToMarkdown},
@@ -123,13 +123,8 @@ const SECTION_SPOTLIGHT_RGBA: (u8, u8, u8, f32) = (52, 152, 219, 0.18);
 /// after a successful CPI is marked at the frame that actually failed, not by
 /// position in the trace.
 fn build_arrows(model: &CpiModel, tx_signers: &[Pubkey], aliases: &Aliases) -> Vec<Arrow> {
-    let mut frames: Vec<&ResolvedFrame> = Vec::new();
-    for root in &model.roots {
-        flatten_frames(&root.frame, &mut frames);
-    }
-
     let mut arrows: Vec<Arrow> = Vec::new();
-    for frame in frames {
+    for frame in model.frames() {
         // The origin: program-signed signer first, extended tx signature
         // second.
         let program_signed_origin = frame
@@ -172,15 +167,6 @@ fn build_arrows(model: &CpiModel, tx_signers: &[Pubkey], aliases: &Aliases) -> V
     }
 
     arrows
-}
-
-/// Flatten a model's frame tree in DFS pre-order: the order the arrows read,
-/// matching the trace's execution order.
-fn flatten_frames<'a>(frame: &'a ResolvedFrame, out: &mut Vec<&'a ResolvedFrame>) {
-    out.push(frame);
-    for child in &frame.children {
-        flatten_frames(child, out);
-    }
 }
 
 /// Classify every pubkey the arrows touch into lanes. Role priority for
@@ -603,7 +589,7 @@ impl ToMarkdown for AuthorityStory {
 mod tests {
     use {
         super::*,
-        crate::transaction::model::{AccountRef, Root},
+        crate::transaction::model::{AccountRef, ResolvedFrame, Root},
         crate::transaction::trace::{InstructionTrace, TracedAccount, TracedInstruction},
         std::str::FromStr,
     };

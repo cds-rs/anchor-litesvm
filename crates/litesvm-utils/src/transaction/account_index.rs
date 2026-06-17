@@ -28,10 +28,7 @@
 //! executables) are declared in a `── programs ──` footer.
 
 use {
-    super::{
-        aliases::Aliases,
-        model::{CpiModel, ResolvedFrame},
-    },
+    super::{aliases::Aliases, model::CpiModel},
     crate::report::{MarkdownBlock, ToMarkdown},
     solana_program::pubkey::Pubkey,
     std::collections::BTreeMap,
@@ -101,21 +98,6 @@ pub struct AccountIndex {
     nodes: Vec<AccountNode>,
 }
 
-/// Every frame in a model's forest, DFS pre-order (the order arrows read).
-fn frames_of(model: &CpiModel) -> Vec<&ResolvedFrame> {
-    fn go<'a>(frame: &'a ResolvedFrame, out: &mut Vec<&'a ResolvedFrame>) {
-        out.push(frame);
-        for child in &frame.children {
-            go(child, out);
-        }
-    }
-    let mut out = Vec::new();
-    for root in &model.roots {
-        go(&root.frame, &mut out);
-    }
-    out
-}
-
 impl AccountIndex {
     pub fn nodes(&self) -> &[AccountNode] {
         &self.nodes
@@ -139,7 +121,7 @@ impl AccountIndex {
         let mut order: Vec<Pubkey> = Vec::new();
 
         for model in models {
-            for frame in frames_of(model) {
+            for frame in model.frames() {
                 for acc in &frame.accounts {
                     // The model's accounts are trace-sourced, so owner is set;
                     // a frame the trace didn't cover (owner None) is skipped.
@@ -361,7 +343,7 @@ impl ToMarkdown for AccountIndex {
 mod tests {
     use {
         super::*,
-        crate::transaction::model::{AccountRef, Outcome, Root},
+        crate::transaction::model::{AccountRef, Outcome, ResolvedFrame, Root},
         std::str::FromStr,
     };
 
