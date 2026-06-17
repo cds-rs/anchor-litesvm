@@ -75,7 +75,13 @@ pub enum ArgType {
     /// the bytes. The width is the one format-dependent piece, so the
     /// [`IdlSource`] impl picks it (wincode `DynBytes<u8>` = `U8`, borsh `String`
     /// = `U32`) and the emitter renders it uniformly.
-    Bytes { len: LenWidth },
+    Bytes {
+        len: LenWidth,
+    },
+    /// An optional value: a 1-byte present/absent tag (`0`/`1`), then the inner
+    /// value when present. wincode and borsh agree on this shape, so it's
+    /// format-independent (the inner type carries any format-specific piece).
+    Option(Box<ArgType>),
     /// Anything we don't encode yet (a vec, a defined type): the boundary.
     /// Carries the source spelling for the skip diagnostic.
     Unsupported(String),
@@ -101,19 +107,20 @@ impl LenWidth {
 
 impl ArgType {
     /// The Rust type for a struct field, or `None` past the boundary.
-    pub fn rust_type(&self) -> Option<&'static str> {
+    pub fn rust_type(&self) -> Option<String> {
         Some(match self {
-            ArgType::U8 => "u8",
-            ArgType::U16 => "u16",
-            ArgType::U32 => "u32",
-            ArgType::U64 => "u64",
-            ArgType::I8 => "i8",
-            ArgType::I16 => "i16",
-            ArgType::I32 => "i32",
-            ArgType::I64 => "i64",
-            ArgType::Bool => "bool",
-            ArgType::Pubkey => "Pubkey",
-            ArgType::Bytes { .. } => "String",
+            ArgType::U8 => "u8".into(),
+            ArgType::U16 => "u16".into(),
+            ArgType::U32 => "u32".into(),
+            ArgType::U64 => "u64".into(),
+            ArgType::I8 => "i8".into(),
+            ArgType::I16 => "i16".into(),
+            ArgType::I32 => "i32".into(),
+            ArgType::I64 => "i64".into(),
+            ArgType::Bool => "bool".into(),
+            ArgType::Pubkey => "Pubkey".into(),
+            ArgType::Bytes { .. } => "String".into(),
+            ArgType::Option(inner) => format!("Option<{}>", inner.rust_type()?),
             ArgType::Unsupported(_) => return None,
         })
     }
@@ -130,6 +137,14 @@ impl ArgType {
                 format!(
                     "data.extend_from_slice(&({f}.len() as {lt}).to_le_bytes()); \
                      data.extend_from_slice({f}.as_bytes());"
+                )
+            }
+            ArgType::Option(inner) => {
+                // A 1-byte tag, then the inner value when present. The inner
+                // encodes against the match binding `v`.
+                let some = inner.encode("v")?;
+                format!(
+                    "match &{f} {{ Some(v) => {{ data.push(1); {some} }} None => {{ data.push(0); }} }}"
                 )
             }
             ArgType::Unsupported(_) => return None,
@@ -192,7 +207,12 @@ fn emit_instruction(out: &mut String, ix: &IxDef) {
         let _ = writeln!(out, "    pub {}: Pubkey,", snake(&a.name));
     }
     for arg in &ix.args {
-        let _ = writeln!(out, "    pub {}: {},", snake(&arg.name), arg.ty.rust_type().unwrap());
+        let _ = writeln!(
+            out,
+            "    pub {}: {},",
+            snake(&arg.name),
+            arg.ty.rust_type().unwrap()
+        );
     }
     if ix.has_remaining {
         out.push_str("    /// Appended after the declared accounts, in order.\n");
@@ -203,7 +223,11 @@ fn emit_instruction(out: &mut String, ix: &IxDef) {
     // impl
     let _ = writeln!(out, "impl {name} {{");
     out.push_str("    pub fn ix(&self) -> Instruction {\n");
-    let mutability = if ix.has_remaining { "let mut accounts" } else { "let accounts" };
+    let mutability = if ix.has_remaining {
+        "let mut accounts"
+    } else {
+        "let accounts"
+    };
     let _ = writeln!(out, "        {mutability} = vec![");
     for a in &ix.accounts {
         let pk = match injector(&a.name) {
@@ -224,7 +248,13 @@ fn emit_instruction(out: &mut String, ix: &IxDef) {
         .join(", ");
     let _ = writeln!(out, "        let mut data = vec![{disc}];");
     for arg in &ix.args {
-        let _ = writeln!(out, "        {}", arg.ty.encode(&format!("self.{}", snake(&arg.name))).unwrap());
+        let _ = writeln!(
+            out,
+            "        {}",
+            arg.ty
+                .encode(&format!("self.{}", snake(&arg.name)))
+                .unwrap()
+        );
     }
     out.push_str("        Instruction { program_id: program_id(), accounts, data }\n");
     out.push_str("    }\n\n");
@@ -315,45 +345,106 @@ fn split_camel(w: &str) -> Vec<String> {
     parts
 }
 
-/// The Quasar IDL format: the JSON `quasar idl` emits.
+// --- IDL parsing ------------------------------------------------------------
+// Quasar and Anchor IDLs share a JSON shape: `address` plus `instructions`, each
+// with a discriminator byte array, `accounts` (name + signer/writable), and
+// `args` (name + type, where a type is a scalar string or `{"option": inner}`).
+// They differ only in the string length-prefix width (wincode `DynBytes<u8>` =
+// u8, borsh `String` = u32), so one parser parameterized by that width serves
+// both formats.
+
+#[derive(serde::Deserialize)]
+struct RawIdl {
+    address: String,
+    instructions: Vec<RawIx>,
+}
+
+#[derive(serde::Deserialize)]
+struct RawIx {
+    name: String,
+    discriminator: Vec<u8>,
+    accounts: Vec<RawAcct>,
+    #[serde(default)]
+    args: Vec<RawArg>,
+    #[serde(rename = "remainingAccounts", default)]
+    remaining: Option<serde_json::Value>,
+}
+
+#[derive(serde::Deserialize)]
+struct RawAcct {
+    name: String,
+    #[serde(default)]
+    signer: bool,
+    #[serde(default)]
+    writable: bool,
+}
+
+#[derive(serde::Deserialize)]
+struct RawArg {
+    name: String,
+    #[serde(rename = "type")]
+    ty: serde_json::Value,
+}
+
+/// Parse an IDL JSON into the normalized model. `string_len` is the one
+/// format-dependent piece (wincode `DynBytes<u8>` = `U8`, borsh `String` = `U32`).
+fn parse_idl(json: &str, string_len: LenWidth) -> serde_json::Result<(String, Vec<IxDef>)> {
+    let raw: RawIdl = serde_json::from_str(json)?;
+    let instructions = raw
+        .instructions
+        .into_iter()
+        .map(|ix| IxDef {
+            name: ix.name,
+            discriminator: ix.discriminator,
+            has_remaining: ix.remaining.is_some(),
+            accounts: ix
+                .accounts
+                .into_iter()
+                .map(|a| AccountDef {
+                    name: a.name,
+                    signer: a.signer,
+                    writable: a.writable,
+                })
+                .collect(),
+            args: ix
+                .args
+                .into_iter()
+                .map(|a| ArgDef {
+                    name: a.name,
+                    ty: arg_type(&a.ty, string_len),
+                })
+                .collect(),
+        })
+        .collect();
+    Ok((raw.address, instructions))
+}
+
+fn arg_type(v: &serde_json::Value, string_len: LenWidth) -> ArgType {
+    match v.as_str() {
+        Some("u8") => ArgType::U8,
+        Some("u16") => ArgType::U16,
+        Some("u32") => ArgType::U32,
+        Some("u64") => ArgType::U64,
+        Some("i8") => ArgType::I8,
+        Some("i16") => ArgType::I16,
+        Some("i32") => ArgType::I32,
+        Some("i64") => ArgType::I64,
+        Some("bool") => ArgType::Bool,
+        Some("pubkey") | Some("publicKey") => ArgType::Pubkey,
+        Some("string") => ArgType::Bytes { len: string_len },
+        // `{"option": <inner>}` — an optional value (1-byte tag, then inner).
+        None => match v.get("option") {
+            Some(inner) => ArgType::Option(Box::new(arg_type(inner, string_len))),
+            None => ArgType::Unsupported(v.to_string()),
+        },
+        _ => ArgType::Unsupported(v.to_string()),
+    }
+}
+
+/// The Quasar IDL format (`quasar idl` emits it): wincode encoding, single-byte
+/// discriminators.
 pub mod quasar {
-    use {
-        super::{AccountDef, ArgDef, ArgType, IdlSource, IxDef, LenWidth},
-        serde::Deserialize,
-    };
-
-    #[derive(Deserialize)]
-    struct RawIdl {
-        address: String,
-        instructions: Vec<RawIx>,
-    }
-
-    #[derive(Deserialize)]
-    struct RawIx {
-        name: String,
-        discriminator: Vec<u8>,
-        accounts: Vec<RawAcct>,
-        #[serde(default)]
-        args: Vec<RawArg>,
-        #[serde(rename = "remainingAccounts", default)]
-        remaining: Option<serde_json::Value>,
-    }
-
-    #[derive(Deserialize)]
-    struct RawAcct {
-        name: String,
-        #[serde(default)]
-        signer: bool,
-        #[serde(default)]
-        writable: bool,
-    }
-
-    #[derive(Deserialize)]
-    struct RawArg {
-        name: String,
-        #[serde(rename = "type")]
-        ty: serde_json::Value,
-    }
+    use super::{parse_idl, IdlSource, IxDef, LenWidth};
 
     /// A parsed Quasar IDL.
     pub struct QuasarIdl {
@@ -363,35 +454,9 @@ pub mod quasar {
 
     impl QuasarIdl {
         pub fn from_json(json: &str) -> serde_json::Result<Self> {
-            let raw: RawIdl = serde_json::from_str(json)?;
-            let instructions = raw
-                .instructions
-                .into_iter()
-                .map(|ix| IxDef {
-                    name: ix.name,
-                    discriminator: ix.discriminator,
-                    has_remaining: ix.remaining.is_some(),
-                    accounts: ix
-                        .accounts
-                        .into_iter()
-                        .map(|a| AccountDef {
-                            name: a.name,
-                            signer: a.signer,
-                            writable: a.writable,
-                        })
-                        .collect(),
-                    args: ix
-                        .args
-                        .into_iter()
-                        .map(|a| ArgDef {
-                            name: a.name,
-                            ty: arg_type(&a.ty),
-                        })
-                        .collect(),
-                })
-                .collect();
+            let (address, instructions) = parse_idl(json, LenWidth::U8)?;
             Ok(QuasarIdl {
-                address: raw.address,
+                address,
                 instructions,
             })
         }
@@ -405,22 +470,37 @@ pub mod quasar {
             self.instructions.clone()
         }
     }
+}
 
-    fn arg_type(v: &serde_json::Value) -> ArgType {
-        match v.as_str() {
-            Some("u8") => ArgType::U8,
-            Some("u16") => ArgType::U16,
-            Some("u32") => ArgType::U32,
-            Some("u64") => ArgType::U64,
-            Some("i8") => ArgType::I8,
-            Some("i16") => ArgType::I16,
-            Some("i32") => ArgType::I32,
-            Some("i64") => ArgType::I64,
-            Some("bool") => ArgType::Bool,
-            Some("pubkey") | Some("publicKey") => ArgType::Pubkey,
-            // Quasar `string` is `wincode::DynBytes<u8>`: a u8 length, then bytes.
-            Some("string") => ArgType::Bytes { len: LenWidth::U8 },
-            _ => ArgType::Unsupported(v.to_string()),
+/// The Anchor IDL format (Anchor 0.30+ / Codama JSON): borsh encoding, 8-byte
+/// discriminators. Structurally identical to the Quasar IDL; only the string
+/// length-prefix width differs (borsh `String` is u32-prefixed). The
+/// discriminators are embedded in the JSON, so no sighash computation is needed.
+pub mod anchor {
+    use super::{parse_idl, IdlSource, IxDef, LenWidth};
+
+    /// A parsed Anchor IDL.
+    pub struct AnchorIdl {
+        address: String,
+        instructions: Vec<IxDef>,
+    }
+
+    impl AnchorIdl {
+        pub fn from_json(json: &str) -> serde_json::Result<Self> {
+            let (address, instructions) = parse_idl(json, LenWidth::U32)?;
+            Ok(AnchorIdl {
+                address,
+                instructions,
+            })
+        }
+    }
+
+    impl IdlSource for AnchorIdl {
+        fn program_address(&self) -> &str {
+            &self.address
+        }
+        fn instructions(&self) -> Vec<IxDef> {
+            self.instructions.clone()
         }
     }
 }
@@ -456,7 +536,10 @@ mod tests {
         assert!(out.contains("pub struct Create {"), "{out}");
         assert!(out.contains("pub creator: Pubkey,"));
         assert!(out.contains("pub config: Pubkey,"));
-        assert!(!out.contains("pub system_program: Pubkey,"), "well-known injected, not a field");
+        assert!(
+            !out.contains("pub system_program: Pubkey,"),
+            "well-known injected, not a field"
+        );
         assert!(out.contains("pub threshold: u8,"));
         assert!(out.contains("pub remaining: Vec<AccountMeta>,"));
         // ix() injects the program and discriminator-prefixes the data.
@@ -470,6 +553,23 @@ mod tests {
         assert!(out.contains("pub struct SetLabel"), "{out}");
         assert!(out.contains("pub label: String,"));
         assert!(out.contains("data.extend_from_slice(&(self.label.len() as u8).to_le_bytes());"));
+    }
+
+    #[test]
+    fn an_option_arg_becomes_an_option_field_with_a_tagged_encoding() {
+        let idl = r#"{ "address": "11111111111111111111111111111111",
+            "instructions": [{ "name": "init", "discriminator": [0],
+                "accounts": [{"name":"payer","signer":true,"writable":true}],
+                "args": [{"name":"authority","type":{"option":"pubkey"}}] }] }"#;
+        let out = emit_client(&quasar::QuasarIdl::from_json(idl).unwrap());
+        assert!(out.contains("pub authority: Option<Pubkey>,"), "{out}");
+        // 1-byte tag, then the inner pubkey when present.
+        assert!(out.contains("match &self.authority"), "{out}");
+        assert!(
+            out.contains("data.push(1); data.extend_from_slice(v.as_ref());"),
+            "{out}"
+        );
+        assert!(out.contains("data.push(0);"), "{out}");
     }
 
     #[test]
