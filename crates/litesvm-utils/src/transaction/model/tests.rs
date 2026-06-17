@@ -284,3 +284,148 @@ fn fill_from_trace_names_inner_native_frames_and_never_shadows() {
         "the inner native-program frame should resolve its name from the traced data"
     );
 }
+
+#[test]
+fn from_transaction_sources_inner_accounts_and_names_from_the_trace() {
+    use {
+        solana_message::{compiled_instruction::CompiledInstruction, Message, MessageHeader},
+        solana_program::pubkey::Pubkey,
+        testsvm::{
+            frame::{Frame, Outcome as FrameOutcome},
+            trace::{InstructionTrace, TracedAccount, TracedInstruction},
+        },
+    };
+
+    let program = Pubkey::new_unique();
+    let system = Pubkey::default();
+    let payer = Pubkey::new_unique();
+    let new_acct = Pubkey::new_unique();
+
+    // One top-level instruction to `program`, accounts [payer (signer), new_acct].
+    let message = Message {
+        header: MessageHeader {
+            num_required_signatures: 1,
+            num_readonly_signed_accounts: 0,
+            num_readonly_unsigned_accounts: 1,
+        },
+        account_keys: vec![payer, new_acct, program],
+        instructions: vec![CompiledInstruction {
+            program_id_index: 2,
+            accounts: vec![0, 1],
+            data: vec![9, 9, 9, 9],
+        }],
+        ..Default::default()
+    };
+
+    // Engine-neutral frames: a named root with one unnamed System child.
+    // Neither carries accounts; the trace is their only source (this is the
+    // shape the `From<model::Transaction>` bridge produces, with empty
+    // `inner_instructions`).
+    let frames = vec![Frame {
+        program_id: program,
+        outcome: FrameOutcome::Success,
+        compute_units: None,
+        instruction_name: Some("Withdraw".into()),
+        logs: vec![],
+        children: vec![Frame {
+            program_id: system,
+            outcome: FrameOutcome::Success,
+            compute_units: None,
+            instruction_name: None,
+            logs: vec![],
+            children: vec![],
+        }],
+    }];
+
+    // Flat DFS trace carrying per-frame accounts (with owners) and the inner
+    // System `CreateAccount` data (4-byte u32 LE tag 0). new_acct ends up
+    // owned by `program` (the inner frame's owner differs from the root's).
+    let trace = InstructionTrace(vec![
+        TracedInstruction {
+            program_id: program,
+            stack_height: 1,
+            data: vec![9, 9, 9, 9],
+            accounts: vec![
+                TracedAccount {
+                    pubkey: payer,
+                    is_signer: true,
+                    is_writable: true,
+                    owner: system,
+                },
+                TracedAccount {
+                    pubkey: new_acct,
+                    is_signer: false,
+                    is_writable: true,
+                    owner: system,
+                },
+            ],
+        },
+        TracedInstruction {
+            program_id: system,
+            stack_height: 2,
+            data: vec![0, 0, 0, 0],
+            accounts: vec![
+                TracedAccount {
+                    pubkey: payer,
+                    is_signer: true,
+                    is_writable: true,
+                    owner: system,
+                },
+                TracedAccount {
+                    pubkey: new_acct,
+                    is_signer: false,
+                    is_writable: true,
+                    owner: program,
+                },
+            ],
+        },
+    ]);
+
+    let tx = testsvm::model::Transaction::assemble(
+        frames,
+        message,
+        vec![],
+        None,
+        0,
+        None,
+        Some(trace),
+        None,
+        &Default::default(),
+        &Default::default(),
+        testsvm::aliases::Aliases::default(),
+        Default::default(),
+    );
+
+    let model = from_transaction(&tx);
+
+    let root = &model.roots[0].frame;
+    assert_eq!(root.program, program);
+    assert_eq!(root.instruction_name.as_deref(), Some("Withdraw"));
+    assert_eq!(
+        root.accounts.iter().map(|a| a.pubkey).collect::<Vec<_>>(),
+        vec![payer, new_acct],
+        "root accounts come from the trace",
+    );
+    assert!(root.accounts[0].is_signer && root.accounts[0].is_writable);
+
+    // The whole point: the inner frame's accounts come from the trace (the
+    // build path leaves them empty without `inner_instructions`), with the
+    // trace's owners, and the name decodes from the traced data.
+    let child = &root.children[0];
+    assert_eq!(child.program, system);
+    assert_eq!(
+        child.instruction_name.as_deref(),
+        Some("CreateAccount"),
+        "the inner frame's name decodes from the trace's data",
+    );
+    assert_eq!(
+        child.accounts.iter().map(|a| a.pubkey).collect::<Vec<_>>(),
+        vec![payer, new_acct],
+        "inner-frame accounts come from the trace, not empty inner_instructions",
+    );
+    assert_eq!(
+        child.accounts[1].owner,
+        Some(program),
+        "the inner frame's owner comes from the trace",
+    );
+}

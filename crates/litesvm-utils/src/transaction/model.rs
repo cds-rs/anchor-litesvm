@@ -457,6 +457,158 @@ fn fill_frame_from_trace<'a>(
     }
 }
 
+/// Build the model from an engine-neutral [`testsvm::model::Transaction`] (the
+/// record every engine produces), instead of from litesvm's raw pieces.
+///
+/// This is the neutral twin of [`build`] + [`fill_from_trace`]: it reads the
+/// already-parsed `frames` for structure (the `cpi_tree` work the backend
+/// already did in [`assemble`](testsvm::model::Transaction::assemble)) and the
+/// per-frame `trace` for the account lists, their signer/writable/owner roles,
+/// and the inner instruction data. Where `build` sources child accounts and
+/// names from litesvm's `inner_instructions`, this sources them from the trace,
+/// the only neutral carrier of inner-frame data. Output is byte-identical to
+/// `build` for the litesvm path (a populated trace lines up with the inner
+/// instructions); engines without a trace render account-less inner frames, the
+/// same graceful degradation `fill_from_trace` documents.
+pub(super) fn from_transaction(tx: &testsvm::model::Transaction) -> CpiModel {
+    let signers = super::signers::extract(&tx.message);
+    let mut trace = tx.trace.as_ref().map(|t| t.0.iter());
+    let roots = tx
+        .frames
+        .iter()
+        .enumerate()
+        .map(|(i, frame)| {
+            // The root frame's accounts and name-decode data come from the
+            // i-th top-level instruction (frames line up with message
+            // instructions in order), matching `resolve_roots`.
+            let ci = tx.message.instructions.get(i);
+            Root {
+                signers: signers.per_root.get(i).cloned().unwrap_or_default(),
+                frame: convert_frame(
+                    frame,
+                    1,
+                    &mut trace,
+                    ci.map(|c| c.accounts.as_slice()).unwrap_or(&[]),
+                    ci.map(|c| c.data.as_slice()).unwrap_or(&[]),
+                    tx,
+                ),
+            }
+        })
+        .collect();
+
+    // The header mirrors `build`'s: present for single-instruction sends, the
+    // program and decoded name of that one instruction (built-in decode, then
+    // the `Instruction:` log line, then the registry).
+    let header = (tx.message.instructions.len() == 1).then(|| {
+        let ci = &tx.message.instructions[0];
+        let program = tx.message.account_keys[ci.program_id_index as usize];
+        let pid = program.to_string();
+        Header {
+            program,
+            instruction_name: decode_instruction(&pid, &ci.data)
+                .map(str::to_string)
+                .or_else(|| {
+                    tx.logs.iter().find_map(|log| {
+                        log.strip_prefix("Program log: Instruction: ")
+                            .map(str::to_string)
+                    })
+                })
+                .or_else(|| {
+                    tx.instruction_names
+                        .resolve(&pid, &ci.data)
+                        .map(str::to_string)
+                }),
+        }
+    });
+
+    CpiModel {
+        header,
+        roots,
+        tx_signers: signers.tx_signers.clone(),
+        error: tx.error.clone(),
+        compute_units: tx.compute_units,
+        fee: tx.fee.unwrap_or(0),
+        events: tx.events.clone(),
+    }
+}
+
+/// Convert one neutral [`Frame`](testsvm::frame::Frame) into a
+/// [`ResolvedFrame`], pulling accounts and inner data from the trace in DFS
+/// pre-order lockstep (each frame consumes one traced instruction, exactly as
+/// [`fill_from_trace`] correlates them). `root_accounts` / `root_data` feed the
+/// no-trace root fallback and the name decode, mirroring [`resolve_frame`].
+fn convert_frame(
+    frame: &testsvm::frame::Frame,
+    depth: usize,
+    trace: &mut Option<std::slice::Iter<'_, TracedInstruction>>,
+    root_accounts: &[u8],
+    root_data: &[u8],
+    tx: &testsvm::model::Transaction,
+) -> ResolvedFrame {
+    let traced = trace.as_mut().and_then(|it| it.next());
+
+    // Accounts and inner data come from the trace when present (the only
+    // neutral carrier of an inner frame's account list and data). Without a
+    // trace, a root frame falls back to its message account list; an inner
+    // frame cannot be reconstructed and renders account-less.
+    let (accounts, data) = match traced {
+        Some(t) => (
+            t.accounts
+                .iter()
+                .map(|a| AccountRef {
+                    pubkey: a.pubkey,
+                    is_signer: a.is_signer,
+                    is_writable: a.is_writable,
+                    owner: Some(a.owner),
+                })
+                .collect(),
+            t.data.clone(),
+        ),
+        None if depth == 1 => (resolve_accounts(root_accounts, &tx.message), Vec::new()),
+        None => (Vec::new(), Vec::new()),
+    };
+
+    // The name resolves with the same precedence as `resolve_frame`: a name the
+    // neutral frame already carries (an `Instruction:` log line) wins; otherwise
+    // decode from this frame's data (the root's message data at depth 1, the
+    // trace's inner data below) through the built-in decoders and the registry.
+    let name_data: &[u8] = if depth == 1 { root_data } else { &data };
+    let instruction_name = frame
+        .instruction_name
+        .clone()
+        .or_else(|| resolve_name(&tx.instruction_names, &frame.program_id, name_data));
+
+    let children = frame
+        .children
+        .iter()
+        .map(|c| convert_frame(c, depth + 1, trace, &[], &[], tx))
+        .collect();
+
+    ResolvedFrame {
+        program: frame.program_id,
+        instruction_name,
+        outcome: match &frame.outcome {
+            testsvm::frame::Outcome::Success => Outcome::Success,
+            testsvm::frame::Outcome::Truncated => Outcome::Truncated,
+            testsvm::frame::Outcome::Failed { message } => Outcome::Failed {
+                message: message.clone(),
+            },
+        },
+        compute_units: frame.compute_units.map(|cu| cu.consumed),
+        accounts,
+        logs: frame
+            .logs
+            .iter()
+            .map(|l| match l {
+                testsvm::frame::FrameLog::Msg(s) => FrameLog::Msg(s.clone()),
+                testsvm::frame::FrameLog::Data(s) => FrameLog::Data(s.clone()),
+            })
+            .collect(),
+        data,
+        children,
+    }
+}
+
 /// Legacy-message signer rule: the first `num_required_signatures` account
 /// keys are the signers.
 fn is_signer(index: usize, header: &MessageHeader) -> bool {
