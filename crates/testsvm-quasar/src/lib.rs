@@ -9,10 +9,11 @@
 //!
 //! A multi-instruction `send` compiles to one sanitized message and runs under
 //! a shared budget, so `atomic_send: true` (where mollusk chains state without
-//! atomicity). No fees and no per-frame privilege trace in v1, so the authority
-//! diagram degrades exactly as it does on mollusk. This crate's dependency
-//! graph carries NO litesvm and NO mollusk: same test, different backend,
-//! rebuild.
+//! atomicity). No fees (quasar is signature-less), but quasar records its own
+//! per-frame execution trace, which this adapter maps to the neutral
+//! `InstructionTrace`, so the authority and ownership views render in full
+//! rather than degrading like mollusk's. This crate's dependency graph carries
+//! NO litesvm and NO mollusk: same test, different backend, rebuild.
 
 use {
     quasar_svm::{loader_keys, Account as QuasarAccount, QuasarSvm},
@@ -108,6 +109,44 @@ impl TestSVM for QuasarBackend {
         let frames = testsvm::frame::frames_from_logs(&logs);
         let error = result.raw_result.as_ref().err().map(|e| e.to_string());
         let return_data = (!result.return_data.is_empty()).then(|| result.return_data.clone());
+
+        // quasar-svm already records a per-frame execution trace (stack depth,
+        // program, per-account signer/writable, instruction data) off its Agave
+        // `TransactionContext`; map it to the engine-neutral `InstructionTrace`
+        // so the authority view lights up. The one field quasar's trace omits is
+        // each account's owner, which the ownership view needs: read it back
+        // from the committed store (the post-execution owner, exactly what
+        // `fill_owners` reads on litesvm). quasar's stack depth is 0-based
+        // (0 = top level); the neutral trace follows Agave's 1-based stack
+        // height, so add one.
+        let trace = testsvm::trace::InstructionTrace(
+            result
+                .execution_trace
+                .instructions
+                .iter()
+                .map(|ei| testsvm::trace::TracedInstruction {
+                    program_id: ei.instruction.program_id,
+                    stack_height: ei.stack_depth as usize + 1,
+                    accounts: ei
+                        .instruction
+                        .accounts
+                        .iter()
+                        .map(|meta| testsvm::trace::TracedAccount {
+                            pubkey: meta.pubkey,
+                            is_signer: meta.is_signer,
+                            is_writable: meta.is_writable,
+                            owner: self
+                                .svm
+                                .get_account(&meta.pubkey)
+                                .map(|a| a.owner)
+                                .unwrap_or_default(),
+                        })
+                        .collect(),
+                    data: ei.instruction.data.clone(),
+                })
+                .collect(),
+        );
+
         model::Transaction::assemble(
             frames,
             message,
@@ -115,7 +154,7 @@ impl TestSVM for QuasarBackend {
             error,
             result.compute_units_consumed,
             None, // quasar-svm is signature-less; it models no fee
-            None, // no per-frame privilege trace in v1
+            Some(trace),
             return_data,
             &self.instruction_names,
             &self.error_names,
@@ -200,9 +239,9 @@ impl TestSVM for QuasarBackend {
 
     fn capabilities(&self) -> Capabilities {
         Capabilities {
-            per_frame_trace: false, // no InstructionTrace extracted in v1
-            structured_cpi: false,  // v1: frames via the canonical log parse
-            atomic_send: true,      // one sanitized message, shared budget
+            per_frame_trace: true, // mapped from quasar-svm's own ExecutionTrace
+            structured_cpi: false, // v1: frames via the canonical log parse
+            atomic_send: true,     // one sanitized message, shared budget
             fees: false,
             instant_reset: true,
             fork: false,
@@ -234,6 +273,29 @@ mod tests {
             !tx.frames.is_empty(),
             "frames parsed from the returned logs"
         );
+
+        // The per-frame trace is mapped from quasar's own ExecutionTrace: the
+        // top frame is the System program, the payer signs and is writable, the
+        // destination is written, and both owners come back from the committed
+        // store (the field quasar's native trace omits, filled via get_account).
+        let trace = tx.trace.as_ref().expect("quasar fills the privilege trace");
+        let top = trace.0.first().expect("one top-level frame for a transfer");
+        assert_eq!(top.program_id, solana_system_interface::program::id());
+        let payer_acct = top
+            .accounts
+            .iter()
+            .find(|a| a.pubkey == payer.pubkey())
+            .expect("payer is a traced account");
+        assert!(payer_acct.is_signer && payer_acct.is_writable);
+        assert_eq!(payer_acct.owner, solana_system_interface::program::id());
+        let dest_acct = top
+            .accounts
+            .iter()
+            .find(|a| a.pubkey == dest)
+            .expect("dest is a traced account");
+        assert!(dest_acct.is_writable && !dest_acct.is_signer);
+        assert_eq!(dest_acct.owner, solana_system_interface::program::id());
+
         assert_eq!(
             backend.account_owner(&dest),
             Some(solana_system_interface::program::id()),
@@ -243,7 +305,7 @@ mod tests {
             Some(2_000_000)
         );
         let caps = backend.capabilities();
-        assert!(caps.atomic_send && !caps.fees && !caps.per_frame_trace);
+        assert!(caps.atomic_send && !caps.fees && caps.per_frame_trace);
     }
 
     #[test]
