@@ -71,9 +71,32 @@ pub enum ArgType {
     I64,
     Bool,
     Pubkey,
-    /// Anything not flat (a string, a vec, a defined type): the encoding
-    /// boundary. Carries the source spelling for the skip diagnostic.
+    /// Length-prefixed bytes (a string): a `len`-width little-endian count, then
+    /// the bytes. The width is the one format-dependent piece, so the
+    /// [`IdlSource`] impl picks it (wincode `DynBytes<u8>` = `U8`, borsh `String`
+    /// = `U32`) and the emitter renders it uniformly.
+    Bytes { len: LenWidth },
+    /// Anything we don't encode yet (a vec, a defined type): the boundary.
+    /// Carries the source spelling for the skip diagnostic.
     Unsupported(String),
+}
+
+/// The width of a length prefix.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LenWidth {
+    U8,
+    U16,
+    U32,
+}
+
+impl LenWidth {
+    fn rust_type(self) -> &'static str {
+        match self {
+            LenWidth::U8 => "u8",
+            LenWidth::U16 => "u16",
+            LenWidth::U32 => "u32",
+        }
+    }
 }
 
 impl ArgType {
@@ -90,6 +113,7 @@ impl ArgType {
             ArgType::I64 => "i64",
             ArgType::Bool => "bool",
             ArgType::Pubkey => "Pubkey",
+            ArgType::Bytes { .. } => "String",
             ArgType::Unsupported(_) => return None,
         })
     }
@@ -100,6 +124,14 @@ impl ArgType {
         Some(match self {
             ArgType::Bool => format!("data.push({f} as u8);"),
             ArgType::Pubkey => format!("data.extend_from_slice({f}.as_ref());"),
+            ArgType::Bytes { len } => {
+                // The length prefix in its declared width, then the bytes.
+                let lt = len.rust_type();
+                format!(
+                    "data.extend_from_slice(&({f}.len() as {lt}).to_le_bytes()); \
+                     data.extend_from_slice({f}.as_bytes());"
+                )
+            }
             ArgType::Unsupported(_) => return None,
             // Every integer is little-endian, which is both wincode's and
             // borsh's scalar encoding, so this is format-independent.
@@ -286,7 +318,7 @@ fn split_camel(w: &str) -> Vec<String> {
 /// The Quasar IDL format: the JSON `quasar idl` emits.
 pub mod quasar {
     use {
-        super::{AccountDef, ArgDef, ArgType, IdlSource, IxDef},
+        super::{AccountDef, ArgDef, ArgType, IdlSource, IxDef, LenWidth},
         serde::Deserialize,
     };
 
@@ -386,6 +418,8 @@ pub mod quasar {
             Some("i64") => ArgType::I64,
             Some("bool") => ArgType::Bool,
             Some("pubkey") | Some("publicKey") => ArgType::Pubkey,
+            // Quasar `string` is `wincode::DynBytes<u8>`: a u8 length, then bytes.
+            Some("string") => ArgType::Bytes { len: LenWidth::U8 },
             _ => ArgType::Unsupported(v.to_string()),
         }
     }
@@ -431,8 +465,21 @@ mod tests {
         assert!(out.contains("data.extend_from_slice(&self.threshold.to_le_bytes());"));
         // alias_all names the declared accounts.
         assert!(out.contains("backend.register_alias(&self.config, \"Config\");"));
-        // The non-scalar instruction is skipped at the boundary.
-        assert!(out.contains("// SKIPPED `set_label`"), "{out}");
-        assert!(!out.contains("pub struct SetLabel"));
+        // A string arg comes in as a `String` field with a u8 length prefix
+        // (Quasar's wincode DynBytes<u8>), so set_label generates too.
+        assert!(out.contains("pub struct SetLabel"), "{out}");
+        assert!(out.contains("pub label: String,"));
+        assert!(out.contains("data.extend_from_slice(&(self.label.len() as u8).to_le_bytes());"));
+    }
+
+    #[test]
+    fn a_vec_arg_stays_past_the_boundary() {
+        let idl = r#"{ "address": "11111111111111111111111111111111",
+            "instructions": [{ "name": "batch", "discriminator": [9],
+                "accounts": [{"name":"payer","signer":true,"writable":true}],
+                "args": [{"name":"items","type":{"vec":"u64"}}] }] }"#;
+        let out = emit_client(&quasar::QuasarIdl::from_json(idl).unwrap());
+        assert!(out.contains("// SKIPPED `batch`"), "{out}");
+        assert!(!out.contains("pub struct Batch"));
     }
 }
