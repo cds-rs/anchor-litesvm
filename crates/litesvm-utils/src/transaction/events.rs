@@ -13,7 +13,10 @@ use base64::Engine as _;
 /// or `None` when the payload isn't valid base64, is too short to carry a
 /// discriminator, or carries one with no decoder (each a clean miss). The
 /// base64 framing is stripped here; the registry decodes the resulting bytes.
-pub(crate) fn decode_program_data(registry: &EventRegistry, payload_b64: &str) -> Option<EventInfo> {
+pub(crate) fn decode_program_data(
+    registry: &EventRegistry,
+    payload_b64: &str,
+) -> Option<EventInfo> {
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(payload_b64.trim())
         .ok()?;

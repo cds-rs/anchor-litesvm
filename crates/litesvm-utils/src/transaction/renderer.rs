@@ -72,9 +72,12 @@ impl<'a> LegendCollector<'a> {
     /// the inner instruction's data, which the trace carries onto the frame).
     /// Fields are alias-substituted exactly as in [`decode_event`](Self::decode_event).
     pub(super) fn decode_cpi_event(&self, program: &Pubkey, data: &[u8]) -> Option<EventInfo> {
-        Some(self.events.decode_cpi(program, data)?.resolved(self.aliases))
+        Some(
+            self.events
+                .decode_cpi(program, data)?
+                .resolved(self.aliases),
+        )
     }
-
 
     /// The recorded `(name, Pubkey)` pairs in insertion order.
     pub(super) fn into_entries(self) -> IndexMap<&'a str, Pubkey> {

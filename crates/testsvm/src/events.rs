@@ -323,7 +323,9 @@ mod tests {
 
         let mut data = prefix.clone();
         data.extend_from_slice(&7u64.to_le_bytes());
-        let ev = reg.decode_cpi(&program, &data).expect("self-CPI event decodes");
+        let ev = reg
+            .decode_cpi(&program, &data)
+            .expect("self-CPI event decodes");
         assert_eq!(ev.badge(), "🔔 Created { id: 7 }");
 
         // The same payload attributed to a *different* program is a clean miss:

@@ -242,7 +242,8 @@ impl TestSVM for LiteSvmBackend {
         name: &str,
         decode: testsvm::events::EventDecoder,
     ) {
-        self.events.register_cpi(*program_id, prefix.to_vec(), name, decode);
+        self.events
+            .register_cpi(*program_id, prefix.to_vec(), name, decode);
     }
 
     fn register_cast_name(&mut self, name: &str) -> bool {
@@ -483,7 +484,8 @@ mod rpc_backend {
             name: &str,
             decode: testsvm::events::EventDecoder,
         ) {
-            self.events.register_cpi(*program_id, prefix.to_vec(), name, decode);
+            self.events
+                .register_cpi(*program_id, prefix.to_vec(), name, decode);
         }
 
         /// Recorded in this backend's table (stamped onto every sent

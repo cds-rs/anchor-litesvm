@@ -335,7 +335,12 @@ pub fn format_cpi_tree_labeled(
     frames: &[Frame],
     labeler: &dyn crate::aliases::Labeler,
 ) -> String {
-    format_cpi_tree_with_events(header, frames, labeler, &crate::events::EventRegistry::new())
+    format_cpi_tree_with_events(
+        header,
+        frames,
+        labeler,
+        &crate::events::EventRegistry::new(),
+    )
 }
 
 /// The event-aware tree: `Program data:` rows decode through `events` and
@@ -426,7 +431,15 @@ fn write_frame(
     }
     let last_idx = frame.children.len().saturating_sub(1);
     for (i, child) in frame.children.iter().enumerate() {
-        write_frame(out, child, &child_prefix, i == last_idx, false, labeler, events);
+        write_frame(
+            out,
+            child,
+            &child_prefix,
+            i == last_idx,
+            false,
+            labeler,
+            events,
+        );
     }
 }
 
