@@ -25,7 +25,7 @@ use {
     solana_signer::Signer,
     spl_token_interface::state::{Account as TokenAccount, AccountState, Mint},
     std::str::FromStr,
-    testsvm::TestSVM,
+    testsvm::{model::Transaction, TestSVM},
     testsvm_quasar::QuasarBackend,
 };
 
@@ -362,6 +362,54 @@ fn assert_closed(backend: &QuasarBackend, escrow: &Pubkey) {
     assert_eq!(lamports, 0, "escrow PDA closed (lamports returned to maker)");
 }
 
+/// The `take` verb: the taker pays the asked mint_b and receives the vault's
+/// mint_a, closing the escrow. Returns the transaction so the scenario reads
+/// its outcome.
+fn take(
+    backend: &mut QuasarBackend,
+    e: &Opened,
+    taker: &Keypair,
+    taker_ta_a: Pubkey,
+    taker_ta_b: Pubkey,
+) -> Transaction {
+    let ix = take_ix(
+        program_id(),
+        taker.pubkey(),
+        e.escrow,
+        e.maker.pubkey(),
+        e.mint_a,
+        e.mint_b,
+        taker_ta_a,
+        taker_ta_b,
+        e.maker_ta_b,
+        e.vault_ta_a,
+        e.rent,
+        e.token_program,
+        e.system_program,
+    );
+    let tx = backend.send(&[ix], &[taker]);
+    println!("\n=== take ===\n{}", tx.pretty_cpi_tree());
+    tx
+}
+
+/// The `refund` verb: the maker reclaims the deposit and closes the escrow.
+fn refund(backend: &mut QuasarBackend, e: &Opened) -> Transaction {
+    let ix = refund_ix(
+        program_id(),
+        e.maker.pubkey(),
+        e.escrow,
+        e.mint_a,
+        e.maker_ta_a,
+        e.vault_ta_a,
+        e.rent,
+        e.token_program,
+        e.system_program,
+    );
+    let tx = backend.send(&[ix], &[&e.maker]);
+    println!("\n=== refund ===\n{}", tx.pretty_cpi_tree());
+    tx
+}
+
 // --- the scenarios ---------------------------------------------------------
 
 #[test]
@@ -406,14 +454,9 @@ fn escrow_take() {
         10_000,
     );
 
-    let ix = take_ix(
-        id, taker_pk, e.escrow, e.maker.pubkey(), e.mint_a, e.mint_b, taker_ta_a, taker_ta_b,
-        e.maker_ta_b, e.vault_ta_a, e.rent, e.token_program, e.system_program,
-    );
-    let tx = backend.send(&[ix], &[&taker]);
-    let tree = tx.pretty_cpi_tree();
-    println!("\n=== take ===\n{tree}");
+    let tx = take(&mut backend, &e, &taker, taker_ta_a, taker_ta_b);
     assert!(tx.error.is_none(), "take should succeed: {:?}", tx.error);
+    let tree = tx.pretty_cpi_tree();
     assert!(
         tree.contains("🔔 TakeEvent { escrow: Escrow }"),
         "the take event decodes with the escrow alias:\n{tree}"
@@ -439,14 +482,9 @@ fn escrow_refund() {
 
     let e = open_escrow(&mut backend, id);
 
-    let ix = refund_ix(
-        id, e.maker.pubkey(), e.escrow, e.mint_a, e.maker_ta_a, e.vault_ta_a, e.rent,
-        e.token_program, e.system_program,
-    );
-    let tx = backend.send(&[ix], &[&e.maker]);
-    let tree = tx.pretty_cpi_tree();
-    println!("\n=== refund ===\n{tree}");
+    let tx = refund(&mut backend, &e);
     assert!(tx.error.is_none(), "refund should succeed: {:?}", tx.error);
+    let tree = tx.pretty_cpi_tree();
     assert!(
         tree.contains("🔔 RefundEvent { escrow: Escrow }"),
         "the refund event decodes with the escrow alias:\n{tree}"
