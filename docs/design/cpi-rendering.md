@@ -81,6 +81,88 @@ trait the views implement), and `tree` / `mermaid` / `authority` / `ownership`
 are adapters. `transaction.rs` shrinks to "build the model once, pick a
 renderer, hand back its string."
 
+## The static structure: one core, two renderer families
+
+The pipeline above reads left to right. The *type* structure reads top down,
+and it is where the sharing concentrates: under the `Renderer` port, two
+mechanisms back the views so no two of them re-implement the same walk or the
+same emit.
+
+```text
+                 ┌──────────────────────────────────────────────┐
+                 │  CpiModel                       (model.rs)    │  the core DS
+                 │  roots → ResolvedFrame → AccountRef           │  (domain)
+                 │              │  program    pubkey, is_signer,  │
+                 │              │  outcome    is_writable, owner  │
+                 │              └─ children ↺  (self-nested CPI)  │
+                 │  fn frames() → Vec<&ResolvedFrame>  ●          │  ONE DFS walk
+                 └───────────────────────┬──────────────────────┘
+                         consumes ● ──────┴───────────────────────────────┐
+   ┌────────────────────────────────────────┐                            │
+   │  GRAPH family   (flatten the forest)    │   STRUCTURAL family        │
+   │  AuthorityGraph      OwnershipGraph      │   (walk for nesting,       │
+   │  authority.rs        ownership.rs        │    NOT via frames())       │
+   │       │  use graph::*  │                 │   TreeRenderer             │
+   │       └───────┬────────┘                 │   MermaidRenderer          │
+   │               ▼                          │   tree.rs    mermaid.rs    │
+   │  ┌─────────────────────────────────┐     │       │          │         │
+   │  │ graph.rs   shared emitter       │     │       │          │         │
+   │  │ Shape · NodeStyle · upsert ·    │     │       │          │         │
+   │  │ render_flowchart  ◄ ONE emit    │     │       │          │         │
+   │  └─────────────────────────────────┘     │       │          │         │
+   └───────────────────┬──────────────────────┴───────┴──────────┘
+                       │   all impl the port + resolve through its services:
+                       ▼
+   ┌──────────────────────────────────────────────────────┐
+   │  renderer.rs                                          │  the port
+   │  trait Renderer{ render(&CpiModel,&Aliases)->String } │  + shared
+   │  LegendCollector · NodeIds · node_label               │  services
+   └──────────────────────────────────────────────────────┘
+
+   read frames() but sit OUTSIDE the Renderer port (per-test altitude):
+        authority_story.rs  (free render fn)
+        account_index.rs    (ToMarkdown census, markdown not a flowchart)
+```
+
+**One traversal: `CpiModel::frames()`.** The model is a forest (roots, each a
+self-nested `ResolvedFrame`). Visiting every frame in DFS pre-order is the move
+nearly every consumer makes, so the model exposes it once as
+`frames() -> Vec<&ResolvedFrame>`. Five callers share it: `failure_messages`
+(internal), the two graphs, the authority flow, and the account index. A
+consumer that needs the *nesting* rather than a flat list does not use it (the
+two families, below).
+
+**One emitter: `graph.rs`.** The authority and ownership graphs are the same
+drawing with different selection rules: a Mermaid `flowchart LR` of typed nodes
+(a `NodeStyle` carries the bracket shape, the CSS class, and a `rank`, so a
+pubkey seen in two roles keeps its strongest) and verb-labeled edges.
+`render_flowchart` is the single copy of that emit; each graph keeps only its
+own policy (which account becomes which node and edge, in which palette). A
+future flowchart view is a new policy over the same emitter, not a third copy of
+the brackets-and-arrows code.
+
+**Two families, deliberately not merged.** The views split by what they read
+from the model:
+
+| Family | Reads | Members | Walk |
+|---|---|---|---|
+| **Structural** | the *nesting* (who called whom, in order) | tree, mermaid | own recursion over `children` |
+| **Graph** | a *flattened* set of per-account facts | authority, ownership | `frames()` |
+
+The structural pair keeps its own recursion on purpose: a sequence diagram and a
+box tree are *about* the call hierarchy, so flattening it away would discard the
+thing they draw. Folding all four onto one traversal would be the wrong
+abstraction; the line between the families is the call-hierarchy question, and
+it is worth holding.
+
+**N.B. (the port is not yet universal).** `tree` / `mermaid` / `authority` /
+`ownership` all `impl Renderer`. The two per-test renderers do not:
+`authority_story` is a free `render` function and `account_index` is a
+`ToMarkdown` census rather than a flowchart. They read the same model (and the
+same `frames()`), but their output shape sits outside the single-string
+`Renderer` port. Bringing them under it is open work, on the record here rather
+than left as a surprise.
+
 ## The tree-api boundary: `litesvm::cpi_tree`
 
 Source files: `crates/litesvm-utils/src/transaction/model.rs`.
@@ -288,13 +370,14 @@ return lines is what maintains order.
 signer --signs--> program --writes--> account
 ```
 
-It reads `ResolvedFrame.accounts`. For each frame: a signer account draws a
-`signs` edge to the program; a writable non-signer account draws a `writes`
-edge from the program. Read-only non-signer accounts are dropped, to keep the
-graph about authority and state change. Nodes carry a role with precedence
-(`program > signer > writable`), so a pubkey seen in more than one role is
-drawn once at its highest. Edges dedup across frames and descend through CPI
-children.
+It walks the model through `frames()` and reads each `ResolvedFrame.accounts`:
+a signer account draws a `signs` edge to the program; a writable non-signer
+account draws a `writes` edge from the program. Read-only non-signer accounts
+are dropped, to keep the graph about authority and state change. Nodes carry a
+`NodeStyle` rank (`program > signer > writable`), so a pubkey seen in more than
+one role is drawn once at its highest. The nodes and edges go to `graph.rs`'s
+`render_flowchart` for the actual drawing; ownership is the same emitter with a
+different policy.
 
 N.B. the same caveat as the tree's `signer=`: "signs" is the account-list
 relationship (X is a required signer referenced by an instruction to P), not a
@@ -309,6 +392,12 @@ writability is left implicit.
 ```text
 owner-program --owns--> account
 ```
+
+Mechanically it is the authority graph's twin: walk `frames()`, keep the
+writable accounts that have a known owner, draw an `owns` edge, and emit through
+the same `render_flowchart` (its own palette and the single `owns` edge group).
+The two graphs differ only in selection, which is the whole case for the shared
+emitter.
 
 The owner usually differs from the writer, and that gap is the point. When an
 Escrow program CPIs into the Token program to write a token account, the writer
@@ -444,8 +533,9 @@ convention). `print_markdown_pair` is a convenience that wraps the tree in a
 ## References
 
 - Code: `crates/litesvm-utils/src/transaction/` (`model.rs`, `renderer.rs`,
-  `tree.rs`, `mermaid.rs`, `authority.rs`, `ownership.rs`, `aliases.rs`,
-  `signers.rs`, and `transaction.rs` for the public surface).
+  `graph.rs` (the shared flowchart emitter), `tree.rs`, `mermaid.rs`,
+  `authority.rs`, `ownership.rs`, `aliases.rs`, `signers.rs`, and
+  `transaction.rs` for the public surface).
 - Demo: `crates/anchor-litesvm/examples/account_graphs.rs`.
 - Public API on `TransactionResult`: `print_logs_structured` /
   `logs_structured_string`, `print_mermaid` / `mermaid_string` /
