@@ -57,9 +57,14 @@ impl ConsoleRenderer {
                 Event::Check { label, expected, actual, pass } => {
                     out.push_str(&pad);
                     if *pass {
+                        // Show the asserted value on the happy path too: in a
+                        // report the number IS the substance, and the markdown
+                        // renderer keeps it (`- [x] label: \`value\``).
                         out.push_str(&self.style.green("✓"));
                         out.push(' ');
                         out.push_str(label);
+                        out.push_str(": ");
+                        out.push_str(actual);
                         out.push('\n');
                     } else {
                         out.push_str(&self.style.red("✗"));
@@ -140,7 +145,8 @@ mod tests {
         let mut r = Report::new("T", "i");
         r.check("fee", 0u64, 0u64);
         let out = plain().render(&r, Status::Pass);
-        assert!(out.contains("✓ fee"), "got:\n{out}");
+        // The asserted value rides on the happy path, not just the label.
+        assert!(out.contains("✓ fee: 0"), "got:\n{out}");
         assert!(out.contains("PASS"), "footer missing:\n{out}");
         r.disarm();
     }
