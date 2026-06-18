@@ -47,6 +47,33 @@ pub fn scenario<B: TestSVM>(backend: &mut B) {
         assert!(tx.trace.is_some(), "trace-capable engines populate it");
     }
 
+    // The relocated renderers run on every engine's record, not just litesvm's.
+    // The authority graph draws the transfer's top-level roles (signer + the
+    // account it writes), which come from the message, so it renders the same on
+    // every engine. Edges emit as Mermaid `-->|verb|`.
+    let authority = tx.authority_graph_string();
+    assert!(
+        authority.contains("|signs|") && authority.contains("|writes|"),
+        "authority graph renders the transfer's roles on every engine:\n{authority}"
+    );
+
+    // The ownership graph is the trace-gated one: an account's owner is not in
+    // the message or the logs, only in the per-frame trace. A trace-capable
+    // engine names the destination's owner (`-->|owns|`); one without degrades
+    // to no owner edges, the graceful path the relocation documents.
+    let ownership = tx.ownership_graph_string();
+    if caps.per_frame_trace {
+        assert!(
+            ownership.contains("|owns|"),
+            "trace-sourced owners reach the ownership graph:\n{ownership}"
+        );
+    } else {
+        assert!(
+            !ownership.contains("|owns|"),
+            "without a trace the ownership graph has no owner to draw:\n{ownership}"
+        );
+    }
+
     // The lever that could not go cross-engine before this trait.
     backend.warp_to_timestamp(1_700_000_000);
     assert_eq!(backend.clock().unix_timestamp, 1_700_000_000);
