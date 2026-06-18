@@ -332,7 +332,7 @@ mod fence_tests {
             MarkdownBlock::raw("```mermaid\nsequenceDiagram\n    Alice ->> Vault: deposit\n```"),
         );
         let out = md.render(false);
-        md.emitted = true;
+        md.disarm();
         assert!(fences_balanced(&out), "report is not well-nested: {out}");
         // The diagram survives as a real (bare-fenced) mermaid block.
         assert!(
@@ -359,7 +359,7 @@ mod fence_tests {
             );
         });
         let out = md.render(false);
-        md.emitted = true;
+        md.disarm();
         assert!(out.contains("<details>\n<summary>Act 1: open the session</summary>"));
         assert!(out.contains("</details>"));
         // A diagram inside the disclosure stays a bare (rendering) mermaid fence,

@@ -53,7 +53,7 @@ pub struct Report {
     pub(super) title: String,
     pub(super) intent: String,
     pub(super) events: Vec<Event>,
-    pub(super) emitted: bool,
+    emitted: bool,
     /// Set by [`disarm`](Report::disarm) in tests that build a `Report` without
     /// wanting file output or panic escalation on drop.
     #[cfg(test)]
@@ -294,7 +294,7 @@ impl Report {
         MarkdownRenderer.render(self, self.status(aborted))
     }
 
-    pub(super) fn flush(&mut self) {
+    fn flush(&mut self) {
         if self.emitted {
             return;
         }

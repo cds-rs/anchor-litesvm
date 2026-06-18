@@ -145,11 +145,11 @@ mod status_tests {
     }
 
     // The (expected_panic, aborted) status logic is unit-testable without
-    // staging a real panic: render directly and read the heading. `emitted` is
-    // set so the Drop impl doesn't also write the report to disk.
+    // staging a real panic: render directly and read the heading. `disarm()`
+    // suppresses the Drop impl's file write and panic escalation.
     fn heading(report: &mut Report, aborted: bool) -> String {
         let out = report.render(aborted);
-        report.emitted = true;
+        report.disarm();
         out.lines().next().unwrap().to_string()
     }
 
@@ -158,7 +158,7 @@ mod status_tests {
         let mut md = Report::new("t", "i");
         md.expect_panic("known bug; fix pending");
         let out = md.render(true);
-        md.emitted = true;
+        md.disarm();
         assert!(out.contains("— RED (expected)"), "{out}");
         assert!(
             out.contains("**Expected abort:** known bug; fix pending"),
@@ -189,7 +189,7 @@ mod status_tests {
         md.transition("yes_votes", 0u8, 255, 255, "`-= 1` underflowed");
         md.transition("no_votes", 7u8, 7, 9, "must be untouched");
         let out = md.render(false);
-        md.emitted = true;
+        md.disarm();
 
         // One table, neutral headers, no checklist syntax.
         assert_eq!(out.matches("| Observation | Before | After |").count(), 1);
