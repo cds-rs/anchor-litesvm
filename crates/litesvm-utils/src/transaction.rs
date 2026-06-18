@@ -28,8 +28,6 @@ pub use events::{EventInfo, EventRegistry};
 pub use instruction_names::InstructionNames;
 pub use trace::{InstructionTrace, TraceHandle, TraceRecorder, TracedAccount, TracedInstruction};
 
-use renderer::Renderer;
-
 use litesvm::types::TransactionMetadata;
 use litesvm::LiteSVM;
 use solana_keypair::Keypair;
@@ -498,53 +496,35 @@ impl TransactionResult {
     /// seeded by [`Aliases::with_well_known`] (System, Token, etc.) are
     /// filtered out so the legend stays focused on test-specific actors.
     pub fn logs_structured_string(&self) -> String {
-        let default_aliases;
-        let aliases: &Aliases = match &self.aliases {
-            Some(a) => a,
-            None => {
-                default_aliases = Aliases::default();
-                &default_aliases
-            }
-        };
-        tree::TreeRenderer {
-            style: style::Style::detect(),
-        }
-        .render(&self.model(), aliases)
+        self.as_model().logs_structured_string()
     }
 
-    /// The fully-resolved CPI model for this send: the `cpi_tree` structure
-    /// with per-frame outcome, instruction names resolved (built-in decoder ->
-    /// log line -> the registered [`InstructionNames`] table), and per-frame
-    /// account authority (signer / writable / owner) enriched from the trace
-    /// when one is attached.
-    ///
-    /// This is *the* model every renderer on this result consumes: the tree,
-    /// the mermaid variants, the authority graph/sequence, and (after a
-    /// `fill_owners` pass) the ownership graph all build from this one value, so
-    /// name resolution and trace enrichment happen in exactly one place. The
-    /// authority story holds the analogous per-submit value across a test.
+    /// Lift this litesvm result into the engine-neutral
+    /// [`model::Transaction`](testsvm::model::Transaction): the same
+    /// [`into_model`](Self::into_model) path `LiteSvmBackend::send` takes, with
+    /// the result's own attached vocabulary (aliases / instruction names / error
+    /// names / events) and the default [`AnchorFailures`](testsvm::model::AnchorFailures)
+    /// resolver, since a bare `TransactionResult` carries no backend to override
+    /// failure naming. The rich renderers delegate through this, so a
+    /// `TransactionResult` and a raw backend record render byte-identically.
+    fn as_model(&self) -> testsvm::model::Transaction {
+        self.into_model(
+            self.instruction_trace.clone(),
+            &self.instruction_names,
+            &self.error_names,
+            &testsvm::model::AnchorFailures,
+            self.aliases.clone().unwrap_or_default(),
+            self.event_registry.clone(),
+        )
+    }
+
+    /// The litesvm-flavored CPI model the per-test renderers (account index,
+    /// authority story) still consume, built from the neutral
+    /// [`as_model`](Self::as_model) record rather than litesvm's raw pieces, so
+    /// resolution happens in exactly one place. The authority story holds the
+    /// analogous per-submit value across a test.
     pub(in crate::transaction) fn model(&self) -> model::CpiModel {
-        let signers = signers::extract(&self.message);
-        let vocab = model::Vocab {
-            instructions: &self.instruction_names,
-            errors: &self.error_names,
-            events: &self.event_registry,
-        };
-        let mut model = model::build(
-            self.instruction.as_ref(),
-            &self.inner.logs,
-            &self.inner.inner_instructions,
-            &self.message,
-            &signers,
-            self.error.clone(),
-            self.compute_units(),
-            self.fee(),
-            vocab,
-        );
-        if let Some(trace) = &self.instruction_trace {
-            model::fill_from_trace(&mut model, trace, vocab);
-        }
-        model
+        model::from_transaction(&self.as_model())
     }
 
     /// Print the transaction's CPI invocation tree as a Mermaid
@@ -591,7 +571,7 @@ impl TransactionResult {
     /// and for callers that want to capture or post-process the
     /// rendered diagram.
     pub fn mermaid_string(&self) -> String {
-        self.render_mermaid(mermaid::Mode::Plain)
+        self.as_model().mermaid_string()
     }
 
     /// Print the transaction's CPI invocation tree as a Mermaid
@@ -622,7 +602,7 @@ impl TransactionResult {
     /// [`print_mermaid_with_lifelines`](Self::print_mermaid_with_lifelines)
     /// but returned as a `String` instead of printed.
     pub fn mermaid_string_with_lifelines(&self) -> String {
-        self.render_mermaid(mermaid::Mode::Lifelines)
+        self.as_model().mermaid_string_with_lifelines()
     }
 
     /// Print the tx's structured CPI tree and a Mermaid sequence
@@ -697,18 +677,7 @@ impl TransactionResult {
     /// [`print_authority_graph`](Self::print_authority_graph) but returned as
     /// a `String`.
     pub fn authority_graph_string(&self) -> String {
-        let default_aliases;
-        let aliases: &Aliases = match &self.aliases {
-            Some(a) => a,
-            None => {
-                default_aliases = Aliases::default();
-                &default_aliases
-            }
-        };
-        // `model()` already joins the trace's per-frame privilege facts: the
-        // message header only knows top-level roles, so a CPI's invoke_signed
-        // PDA would be invisible without it.
-        authority::AuthorityGraph.render(&self.model(), aliases)
+        self.as_model().authority_graph_string()
     }
 
     /// Print the per-submit **authority sequence**: a Mermaid `sequenceDiagram`
@@ -746,11 +715,9 @@ impl TransactionResult {
     /// Print an ownership graph: a Mermaid `flowchart` of which program owns
     /// each account the tx wrote (`owner --owns--> account`).
     ///
-    /// Needs the `svm` because an account's owner is post-execution state, not
-    /// carried by the message or logs: this fills `AccountRef.owner` with one
-    /// `svm.get_account` lookup per account, then renders. (That second lookup
-    /// is the stopgap the model's `fill_owners` documents; a litesvm-metadata
-    /// win removes it.)
+    /// Owners come from the per-frame execution trace (`TracedAccount.owner`),
+    /// so no post-execution `svm.get_account` lookup is needed: the model
+    /// already carries each touched account's owner.
     ///
     /// Consumes and returns `self`; chain or bind at chain end.
     ///
@@ -765,52 +732,19 @@ impl TransactionResult {
     /// # let ix = Instruction::new_with_bytes(solana_program::pubkey::Pubkey::new_unique(), &[], vec![]);
     /// # let payer = Keypair::new();
     /// # let aliases = Aliases::default();
-    /// // `&svm` is free again here: send_ok's `&mut` borrow ended when it
-    /// // returned the owned result.
     /// let result = svm.send_ok(ix, &[&payer], &aliases);
-    /// result.print_ownership_graph(&svm); // owner-program --owns--> account
+    /// result.print_ownership_graph(); // owner-program --owns--> account
     /// ```
-    pub fn print_ownership_graph(self, svm: &LiteSVM) -> Self {
-        print!("{}", self.ownership_graph_string(svm));
+    pub fn print_ownership_graph(self) -> Self {
+        print!("{}", self.ownership_graph_string());
         self
     }
 
     /// Same content as
     /// [`print_ownership_graph`](Self::print_ownership_graph) but returned as a
     /// `String`.
-    pub fn ownership_graph_string(&self, svm: &LiteSVM) -> String {
-        let default_aliases;
-        let aliases: &Aliases = match &self.aliases {
-            Some(a) => a,
-            None => {
-                default_aliases = Aliases::default();
-                &default_aliases
-            }
-        };
-        let mut model = self.model();
-        model::fill_owners(&mut model, |pk| svm.get_account(pk).map(|a| a.owner));
-        ownership::OwnershipGraph.render(&model, aliases)
-    }
-
-    /// Shared body for the four `*_mermaid*` methods: resolve the
-    /// alias table (falling back to `Aliases::default()`), extract
-    /// signers from the message, detect the `ANCHOR_LITESVM_MERMAID_LOGS`
-    /// env var (events always render; logs opt-in via the env var),
-    /// and dispatch to the mermaid renderer at the requested mode.
-    fn render_mermaid(&self, mode: mermaid::Mode) -> String {
-        let default_aliases;
-        let aliases: &Aliases = match &self.aliases {
-            Some(a) => a,
-            None => {
-                default_aliases = Aliases::default();
-                &default_aliases
-            }
-        };
-        mermaid::MermaidRenderer {
-            mode,
-            include_logs: mermaid::detect_include_logs(),
-        }
-        .render(&self.model(), aliases)
+    pub fn ownership_graph_string(&self) -> String {
+        self.as_model().ownership_graph_string()
     }
 
     /// Get the inner TransactionMetadata for direct access

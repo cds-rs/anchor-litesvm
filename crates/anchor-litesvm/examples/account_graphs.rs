@@ -77,5 +77,5 @@ fn main() {
         })
         .print_authority_graph()
         .tap(|_| println!("\n========== Ownership graph: who owns what was written =========="))
-        .print_ownership_graph(&svm);
+        .print_ownership_graph();
 }
