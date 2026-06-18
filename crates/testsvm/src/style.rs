@@ -37,7 +37,6 @@ impl Style {
     }
 
     /// Bold (SGR 1), for headings and the report title.
-    #[allow(dead_code)]
     pub(crate) fn bold(self, s: &str) -> String {
         self.wrap("1", s)
     }

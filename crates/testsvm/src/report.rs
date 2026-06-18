@@ -21,6 +21,7 @@
 //! slug of the title) into a single document with a `just`-style concat step.
 
 mod block;
+mod console;
 mod core;
 mod markdown;
 mod render;

@@ -29,6 +29,9 @@ solana-system-interface = { version = "3.1", features = ["bincode"] }
 base64 = "0.22"
 # Insertion-ordered maps/sets for the CPI renderers (legend, graph nodes/edges).
 indexmap = "2.12"
+# Framed, wrapping tables for the console Report renderer. No TTY/styling
+# features: column widths and borders only.
+comfy-table = { version = "7", default-features = false }
 
 [dev-dependencies]
 # The tree renderer's "never panics on arbitrary log garbage" property test.

@@ -2,7 +2,6 @@ use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 
 use super::block::MarkdownBlock;
-use super::markdown::MarkdownRenderer;
 use super::render::{ReportRenderer, Status};
 
 /// One entry in the report, kept in the order the test produced it.
@@ -287,11 +286,12 @@ impl Report {
         }
     }
 
-    // Thin shim retained so existing call sites/tests compile; delegates to the
-    // markdown renderer with the computed status.
-    #[allow(dead_code)]
+    /// Test-only shim: render this report as Markdown with the given `aborted`
+    /// flag, without writing a file or printing to stdout. Used by in-tree unit
+    /// tests that need to inspect the rendered output directly.
+    #[cfg(test)]
     pub(super) fn render(&self, aborted: bool) -> String {
-        MarkdownRenderer.render(self, self.status(aborted))
+        super::markdown::MarkdownRenderer.render(self, self.status(aborted))
     }
 
     fn flush(&mut self) {
@@ -300,7 +300,13 @@ impl Report {
         }
         self.emitted = true;
         let status = self.status(std::thread::panicking());
-        emit_report(&self.title, &MarkdownRenderer.render(self, status));
+        let markdown = super::markdown::MarkdownRenderer.render(self, status.clone());
+        write_slug_file(&self.title, &markdown); // the committable artifact
+        let console = super::console::ConsoleRenderer {
+            style: crate::style::Style::detect(),
+        }
+        .render(self, status);
+        print!("{console}"); // the live view
     }
 }
 
@@ -400,14 +406,15 @@ fn reports_dir() -> PathBuf {
     PathBuf::from("target").join("md-reports")
 }
 
-/// Write the report to `<reports_dir>/<slug>.md` and echo it to stdout.
+/// Write the report to `<reports_dir>/<slug>.md` (the committable artifact).
 ///
 /// Each test runs on its own thread and writes its own slug-named file, so
 /// there's no contention and no ordering race; a later step can concatenate the
 /// files in sorted (i.e. deterministic) order. The filename is a slug of the
 /// title and the content carries no timestamps, so the artifact is diffable and
-/// commit-friendly.
-fn emit_report(title: &str, body: &str) {
+/// commit-friendly. The stdout echo is handled by the caller (the console
+/// renderer) so this function is purely file I/O.
+fn write_slug_file(title: &str, body: &str) {
     let dir = reports_dir();
     let _ = std::fs::create_dir_all(&dir);
 
@@ -422,7 +429,4 @@ fn emit_report(title: &str, body: &str) {
         })
         .collect();
     let _ = std::fs::write(dir.join(format!("{slug}.md")), body);
-
-    // Also echo to stdout so `cargo test -- --nocapture` shows it inline.
-    println!("{body}");
 }
