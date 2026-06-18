@@ -655,8 +655,13 @@ impl AnchorContext {
             .with_instruction_names(self.instruction_names.clone())
             .with_error_names(self.error_names.clone())
             .with_events(self);
-        self.journal.push(result.logs_structured_string());
-        self.authority.section_auto(&result);
+        // Lift to the neutral record once: the journal render and the authority
+        // story both read it, so naming and trace enrichment happen in one place
+        // (and the story is fed the same engine-neutral record every backend
+        // produces, not a litesvm-only view).
+        let record = result.as_model();
+        self.journal.push(record.logs_structured_string());
+        self.authority.section_auto(&record);
         result
     }
 

@@ -11,7 +11,9 @@
 pub(crate) use crate::{aliases, events, trace};
 pub(crate) use crate::{events::EventRegistry, instructions::InstructionNames};
 
+mod account_index;
 mod authority;
+mod authority_story;
 mod graph;
 mod mermaid;
 pub mod model;
@@ -21,3 +23,9 @@ mod renderer;
 mod signers;
 mod style;
 mod tree;
+
+// The per-test renderers (a census of accounts, a cross-submit authority
+// story): engine-neutral, built from the same `model::Transaction` records, so
+// they live on the spine beside the per-transaction renders.
+pub use account_index::{AccountIndex, AccountNode, AuthorityClass};
+pub use authority_story::AuthorityStory;

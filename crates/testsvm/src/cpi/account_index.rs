@@ -30,7 +30,7 @@
 use {
     super::{aliases::Aliases, model::CpiModel},
     crate::report::{MarkdownBlock, ToMarkdown},
-    solana_program::pubkey::Pubkey,
+    solana_pubkey::Pubkey,
     std::collections::BTreeMap,
     std::fmt::Write,
     std::str::FromStr,
@@ -153,7 +153,7 @@ impl AccountIndex {
         // get_associated_token_address(holder, mint) for some pair already in
         // the census. The mint is itself token-owned; the holder is whatever
         // owns it (a wallet or a PDA, never token-owned).
-        let token_id = spl_token::ID;
+        let token_id = crate::token::SPL_TOKEN_ID;
         let token_owned: Vec<Pubkey> = all_accounts
             .iter()
             .copied()
@@ -163,7 +163,7 @@ impl AccountIndex {
         let ata_of = |ata: &Pubkey| -> Option<(Pubkey, Pubkey)> {
             for holder in &all_accounts {
                 for mint in &token_owned {
-                    if spl_associated_token_account::get_associated_token_address(holder, mint)
+                    if crate::token::associated_token_address(holder, mint, &crate::token::SPL_TOKEN_ID)
                         == *ata
                     {
                         return Some((*holder, *mint));
@@ -319,7 +319,7 @@ impl AccountIndex {
             let _ = writeln!(
                 out,
                 "{}  (derived {ata_edges} ATA {plural})",
-                label(&spl_associated_token_account::ID)
+                label(&crate::token::ASSOCIATED_TOKEN_ID)
             );
         }
 
@@ -343,12 +343,12 @@ impl ToMarkdown for AccountIndex {
 mod tests {
     use {
         super::*,
-        crate::transaction::model::{AccountRef, Outcome, ResolvedFrame, Root},
+        crate::cpi::model::{AccountRef, Outcome, ResolvedFrame, Root},
         std::str::FromStr,
     };
 
     fn token_id() -> Pubkey {
-        spl_token::ID
+        crate::token::SPL_TOKEN_ID
     }
     fn system_id() -> Pubkey {
         Pubkey::from_str("11111111111111111111111111111111").unwrap()
@@ -395,8 +395,8 @@ mod tests {
         let program = Pubkey::new_unique();
         let pool = Pubkey::new_unique(); // a program PDA (owned by `program`)
         let mint_x = Pubkey::new_unique();
-        let alice_x = spl_associated_token_account::get_associated_token_address(&alice, &mint_x);
-        let pool_x = spl_associated_token_account::get_associated_token_address(&pool, &mint_x);
+        let alice_x = crate::token::associated_token_address(&alice, &mint_x, &crate::token::SPL_TOKEN_ID);
+        let pool_x = crate::token::associated_token_address(&pool, &mint_x, &crate::token::SPL_TOKEN_ID);
 
         // One frame referencing them all: a swap-shaped CPI.
         let model = model1(vec![
@@ -432,7 +432,7 @@ mod tests {
     fn tree_nests_atas_under_holders() {
         let alice = Pubkey::new_unique();
         let mint_x = Pubkey::new_unique();
-        let alice_x = spl_associated_token_account::get_associated_token_address(&alice, &mint_x);
+        let alice_x = crate::token::associated_token_address(&alice, &mint_x, &crate::token::SPL_TOKEN_ID);
 
         let model = model1(vec![
             aref(alice, true, system_id()),

@@ -3,10 +3,8 @@
 //! This module provides convenient wrappers for executing transactions
 //! and handling their results in tests.
 
-mod account_index;
 mod aliases;
 mod authority;
-mod authority_story;
 mod error_names;
 mod events;
 mod graph;
@@ -20,10 +18,12 @@ mod style;
 mod trace;
 mod tree;
 
-pub use account_index::{AccountIndex, AccountNode, AuthorityClass};
 pub use aliases::Aliases;
-pub use authority_story::AuthorityStory;
+// account_index + authority_story now live on the spine (testsvm::cpi);
+// re-exported so the litesvm_utils::transaction::{AccountIndex, AuthorityStory}
+// paths keep resolving for the book and dogfooders.
 pub use error_names::ErrorNames;
+pub use testsvm::cpi::{AccountIndex, AccountNode, AuthorityClass, AuthorityStory};
 pub use events::{EventInfo, EventRegistry};
 pub use instruction_names::InstructionNames;
 pub use trace::{InstructionTrace, TraceHandle, TraceRecorder, TracedAccount, TracedInstruction};
@@ -507,7 +507,7 @@ impl TransactionResult {
     /// resolver, since a bare `TransactionResult` carries no backend to override
     /// failure naming. The rich renderers delegate through this, so a
     /// `TransactionResult` and a raw backend record render byte-identically.
-    fn as_model(&self) -> testsvm::model::Transaction {
+    pub fn as_model(&self) -> testsvm::model::Transaction {
         self.into_model(
             self.instruction_trace.clone(),
             &self.instruction_names,
@@ -697,19 +697,7 @@ impl TransactionResult {
     /// [`print_authority_mermaid`](Self::print_authority_mermaid) but returned
     /// as a `String`.
     pub fn authority_mermaid_string(&self) -> String {
-        let default_aliases;
-        let aliases: &Aliases = match &self.aliases {
-            Some(a) => a,
-            None => {
-                default_aliases = Aliases::default();
-                &default_aliases
-            }
-        };
-        // `model()` joins the trace's privilege facts (same as the authority
-        // graph), so an invoke_signed PDA lands in its own lane; `signers` is
-        // still needed separately for the human-signer lanes.
-        let signers = signers::extract(&self.message);
-        authority_story::render(&self.model(), &signers.tx_signers, aliases)
+        self.as_model().authority_mermaid_string()
     }
 
     /// Print an ownership graph: a Mermaid `flowchart` of which program owns

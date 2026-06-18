@@ -70,11 +70,13 @@ use {
     super::{
         aliases::Aliases,
         mermaid::{mermaid_id, INDENT},
-        model::{CpiModel, Outcome},
-        TransactionResult,
+        model::{from_transaction, CpiModel, Outcome},
     },
-    crate::report::{MarkdownBlock, ToMarkdown},
-    solana_program::pubkey::Pubkey,
+    crate::{
+        model::Transaction,
+        report::{MarkdownBlock, ToMarkdown},
+    },
+    solana_pubkey::Pubkey,
     std::fmt::Write,
 };
 
@@ -332,17 +334,19 @@ impl AuthorityStory {
     /// tree and the trace disagree on frame count). `None` when the result
     /// carries no trace (raw `TransactionHelpers` sends; context sends
     /// always attach one).
-    fn prepare(result: &TransactionResult) -> Option<CpiModel> {
-        // Context sends attach an instruction trace; raw `TransactionHelpers`
-        // sends don't, and carry no authority story.
-        result.instruction_trace.as_ref()?;
-        Some(result.model())
+    fn prepare(tx: &Transaction) -> Option<CpiModel> {
+        // A backend that witnessed the per-frame trace (litesvm, quasar)
+        // carries an authority story; one that didn't (a raw log-only record)
+        // has no inner-frame privilege to draw, so it carries none.
+        tx.trace.as_ref()?;
+        Some(from_transaction(tx))
     }
 
-    fn push(&mut self, label: String, result: &TransactionResult, model: CpiModel) {
-        if result.aliases.is_some() {
-            self.aliases = result.aliases.clone();
-        }
+    fn push(&mut self, label: String, tx: &Transaction, model: CpiModel) {
+        // The neutral record always carries an alias table (well-known at
+        // least); refreshed on every append so the fullest table wins, captured
+        // for render time since `ToMarkdown` takes no arguments.
+        self.aliases = Some(tx.aliases.clone());
         let spotlight = self.pending_spotlight.take();
         self.sections.push(Section {
             label,
@@ -354,11 +358,11 @@ impl AuthorityStory {
     /// Record one submitted transaction as a section with an explicit
     /// label. No-op (with no error) when the result carries no instruction
     /// trace: raw `TransactionHelpers` sends don't, context sends do.
-    pub fn section(&mut self, label: impl Into<String>, result: &TransactionResult) {
-        let Some(prepared) = Self::prepare(result) else {
+    pub fn section(&mut self, label: impl Into<String>, tx: &Transaction) {
+        let Some(prepared) = Self::prepare(tx) else {
             return;
         };
-        self.push(label.into(), result, prepared);
+        self.push(label.into(), tx, prepared);
     }
 
     /// Record a section labelled by the transaction's top-level instruction
@@ -370,20 +374,12 @@ impl AuthorityStory {
     /// Anchor instructions), else the discriminator decoder against the
     /// trace's data bytes (System, SPL Token, ATA), else the bare program
     /// label.
-    pub fn section_auto(&mut self, result: &TransactionResult) {
-        let Some(prepared) = Self::prepare(result) else {
+    pub fn section_auto(&mut self, tx: &Transaction) {
+        let Some(prepared) = Self::prepare(tx) else {
             return;
         };
         let model = &prepared;
-
-        let default_aliases;
-        let aliases = match &result.aliases {
-            Some(a) => a,
-            None => {
-                default_aliases = Aliases::default();
-                &default_aliases
-            }
-        };
+        let aliases = &tx.aliases;
 
         // One label part per top-level instruction (multi-ix transactions
         // join with " + ").
@@ -407,7 +403,7 @@ impl AuthorityStory {
         if model.error.is_some() {
             label.push_str(" ✗");
         }
-        self.push(label, result, prepared);
+        self.push(label, tx, prepared);
     }
 
     /// Override the alias table used at render time. The context-owned
@@ -589,8 +585,8 @@ impl ToMarkdown for AuthorityStory {
 mod tests {
     use {
         super::*,
-        crate::transaction::model::{AccountRef, ResolvedFrame, Root},
-        crate::transaction::trace::{InstructionTrace, TracedAccount, TracedInstruction},
+        crate::cpi::model::{AccountRef, ResolvedFrame, Root},
+        crate::trace::{InstructionTrace, TracedAccount, TracedInstruction},
         std::str::FromStr,
     };
 

@@ -58,4 +58,14 @@ impl crate::model::Transaction {
     pub fn ownership_graph_string(&self) -> String {
         OwnershipGraph.render(&from_transaction(self), &self.aliases)
     }
+
+    /// The per-submit **authority sequence**: a Mermaid `sequenceDiagram` of who
+    /// was authorized to touch what, the human signers and each `invoke_signed`
+    /// PDA as lanes. The per-transaction twin of the cross-test
+    /// [`AuthorityStory`](super::AuthorityStory); empty when the transaction has
+    /// no authority flow to show.
+    pub fn authority_mermaid_string(&self) -> String {
+        let signers = super::signers::extract(&self.message);
+        super::authority_story::render(&from_transaction(self), &signers.tx_signers, &self.aliases)
+    }
 }
