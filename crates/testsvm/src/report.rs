@@ -251,6 +251,28 @@ pub trait ToMarkdown {
     fn to_markdown(&self) -> MarkdownBlock;
 }
 
+/// The verdict for a completed (or aborted) report.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum Status {
+    Pass,
+    Failed(usize),
+    RedExpected(String),
+    Aborted,
+}
+
+impl Status {
+    /// The heading word the markdown header shows.
+    pub(super) fn label(&self) -> String {
+        match self {
+            Status::Pass => "PASS",
+            Status::Failed(_) => "FAIL",
+            Status::RedExpected(_) => "RED (expected)",
+            Status::Aborted => "ABORTED",
+        }
+        .to_string()
+    }
+}
+
 /// A recorder threaded through a test; emits its Markdown report on `Drop`.
 ///
 /// Construct one at the top of a `#[test] fn`, narrate as the test runs, and
@@ -261,6 +283,10 @@ pub struct Report {
     intent: String,
     events: Vec<Event>,
     emitted: bool,
+    /// Set by [`disarm`](Report::disarm) in tests that build a `Report` without
+    /// wanting file output or panic escalation on drop.
+    #[cfg(test)]
+    disarmed: bool,
     /// `Some(reason)` iff the test declared, via
     /// [`expect_panic`](Report::expect_panic), that it is a parked TDD spec for
     /// a known panic. Flips the emitted status from a surprise `ABORTED` to a
@@ -275,6 +301,8 @@ impl Report {
             intent: intent.into(),
             events: Vec::new(),
             emitted: false,
+            #[cfg(test)]
+            disarmed: false,
             expected_panic: None,
         }
     }
@@ -453,6 +481,15 @@ impl Report {
         self
     }
 
+    /// Suppress the `Drop` emit and failure escalation, so tests that build a
+    /// `Report` without wanting a file written or a panic on drop can clean up
+    /// without side-effects.
+    #[cfg(test)]
+    pub(crate) fn disarm(&mut self) {
+        self.emitted = true;
+        self.disarmed = true;
+    }
+
     fn failures(&self) -> usize {
         self.events
             .iter()
@@ -465,57 +502,35 @@ impl Report {
             .count()
     }
 
+    /// The verdict, given whether `Drop` fired during a panicking unwind.
+    /// `aborted` is a parameter (not read from `thread::panicking()` here) so it
+    /// is unit-testable; `flush` passes `std::thread::panicking()`.
+    pub(super) fn status(&self, aborted: bool) -> Status {
+        match (&self.expected_panic, aborted) {
+            (Some(reason), true) => Status::RedExpected(reason.clone()),
+            (None, true) => Status::Aborted,
+            _ => match self.failures() {
+                0 => Status::Pass,
+                n => Status::Failed(n),
+            },
+        }
+    }
+
+    // Thin shim retained so existing call sites/tests compile; delegates to the
+    // markdown renderer with the computed status. Dead in production (only tests
+    // call it directly); fate deferred to Task 3.
+    #[allow(dead_code)]
+    fn render(&self, aborted: bool) -> String {
+        MarkdownRenderer.render(self, self.status(aborted))
+    }
+
     fn flush(&mut self) {
         if self.emitted {
             return;
         }
         self.emitted = true;
-        // Captured at emit time: on a panicking unwind, Drop fires here with
-        // `panicking()` true, which is what distinguishes a deliberate abort
-        // from a clean end (a test that died half-way proves nothing, however
-        // many checks it had passed by then).
-        emit_report(&self.title, &self.render(std::thread::panicking()));
-    }
-
-    fn render(&self, aborted: bool) -> String {
-        // A *declared* abort is the TDD red phase rather than a surprise; an
-        // undeclared one is a genuine ABORTED. Only a clean end reports the
-        // PASS/FAIL the checks earned.
-        let status = match (&self.expected_panic, aborted) {
-            (Some(_), true) => "RED (expected)",
-            (None, true) => "ABORTED",
-            _ => {
-                if self.failures() == 0 {
-                    "PASS"
-                } else {
-                    "FAIL"
-                }
-            }
-        };
-
-        // Build a list of self-contained blocks, then join with exactly one
-        // blank line between each. Doing the spacing at the seam (rather than
-        // trailing every block with `\n`) is what keeps a `note` or `snapshot`
-        // that follows a `check` from gluing onto the checklist.
-        let mut blocks: Vec<String> = vec![
-            format!("## {} — {status}", self.title),
-            format!("> {}", self.intent),
-        ];
-
-        // Abort context, right under the intent, so a reader skimming the
-        // heading and first lines gets the whole story.
-        if let (Some(reason), true) = (&self.expected_panic, aborted) {
-            blocks.push(format!(
-                "> **Expected abort:** {reason}\n>\n> The report stops at the last \
-                 event recorded before the abort."
-            ));
-        }
-
-        blocks.extend(Self::render_events(&self.events));
-
-        let mut out = blocks.join("\n\n");
-        out.push('\n');
-        out
+        let status = self.status(std::thread::panicking());
+        emit_report(&self.title, &MarkdownRenderer.render(self, status));
     }
 
     /// Render an event sequence into self-contained Markdown blocks, joined by
@@ -599,6 +614,34 @@ impl Report {
     }
 }
 
+/// A strategy for serializing a [`Report`] to a string.
+pub(super) trait ReportRenderer {
+    fn render(&self, report: &Report, status: Status) -> String;
+}
+
+/// Renders a [`Report`] as the Markdown narrative format: an `##` heading,
+/// blockquote intent, and event-derived blocks joined by blank lines.
+pub(super) struct MarkdownRenderer;
+
+impl ReportRenderer for MarkdownRenderer {
+    fn render(&self, report: &Report, status: Status) -> String {
+        let mut blocks: Vec<String> = vec![
+            format!("## {} — {}", report.title, status.label()),
+            format!("> {}", report.intent),
+        ];
+        if let Status::RedExpected(reason) = &status {
+            blocks.push(format!(
+                "> **Expected abort:** {reason}\n>\n> The report stops at the last \
+                 event recorded before the abort."
+            ));
+        }
+        blocks.extend(Report::render_events(&report.events));
+        let mut out = blocks.join("\n\n");
+        out.push('\n');
+        out
+    }
+}
+
 /// Wrap rendered child Markdown in a collapsible `<details>` disclosure.
 ///
 /// `<details>` is a CommonMark "type 6" HTML block: after the blank line that
@@ -665,6 +708,10 @@ impl Drop for Report {
         // anywhere) already brought us here, the report is written and that
         // original panic is what fails the test; we stay quiet.
         let fails = self.failures();
+        #[cfg(test)]
+        if self.disarmed {
+            return;
+        }
         if fails > 0 && !std::thread::panicking() {
             panic!("{}: {fails} check(s) failed; see report", self.title);
         }
@@ -735,6 +782,25 @@ fn emit_report(title: &str, body: &str) {
 }
 
 #[cfg(test)]
+mod golden_tests {
+    use super::Report;
+
+    #[test]
+    fn markdown_render_is_unchanged_after_refactor() {
+        let mut r = Report::new("Demo Title", "what we are proving");
+        r.step("Before");
+        r.note("set the stage");
+        r.check("fee", 0u64, 0u64);
+        let golden = r.render(false); // captured BEFORE refactor; pin it
+        // After the refactor this must equal MarkdownRenderer.render(&r, r.status(false)).
+        assert!(golden.contains("## Demo Title — PASS"));
+        assert!(golden.contains("> what we are proving"));
+        assert!(golden.contains("- [x] fee: `0`"));
+        r.disarm(); // do not also emit on drop during the test (see note)
+    }
+}
+
+#[cfg(test)]
 mod macro_tests {
     use crate::report::MarkdownBlock;
 
@@ -779,7 +845,22 @@ mod macro_tests {
 
 #[cfg(test)]
 mod status_tests {
-    use super::Report;
+    use super::{Report, Status};
+
+    #[test]
+    fn status_reflects_checks_and_abort() {
+        let mut r = Report::new("t", "i");
+        assert_eq!(r.status(false), Status::Pass);
+        r.check("a", 1u64, 2u64); // a failing check
+        assert_eq!(r.status(false), Status::Failed(1));
+        assert_eq!(r.status(true), Status::Aborted);
+        r.disarm();
+
+        let mut e = Report::new("t", "i");
+        e.expect_panic("known TDD red");
+        assert_eq!(e.status(true), Status::RedExpected("known TDD red".to_string()));
+        e.disarm();
+    }
 
     // The (expected_panic, aborted) status logic is unit-testable without
     // staging a real panic: render directly and read the heading. `emitted` is
