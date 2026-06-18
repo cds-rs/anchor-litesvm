@@ -27,3 +27,5 @@ solana-system-interface = { version = "3.1", features = ["bincode"] }
 # the engine-neutral renderer (so every engine's tree gets 🔔, not just litesvm)
 # means the base64 strip lives here now. Thin, pins no solana version.
 base64 = "0.22"
+# Insertion-ordered maps/sets for the CPI renderers (legend, graph nodes/edges).
+indexmap = "2.12"

@@ -10,6 +10,7 @@
 pub mod actors;
 pub mod aliases;
 pub mod conformance;
+pub mod cpi;
 pub mod errors;
 pub mod events;
 pub mod frame;

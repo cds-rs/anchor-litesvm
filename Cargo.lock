@@ -5748,6 +5748,7 @@ name = "testsvm"
 version = "0.4.0"
 dependencies = [
  "base64 0.22.1",
+ "indexmap",
  "solana-account",
  "solana-clock",
  "solana-instruction",

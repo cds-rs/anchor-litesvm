@@ -306,6 +306,16 @@ mod tests {
         );
         let caps = backend.capabilities();
         assert!(caps.atomic_send && !caps.fees && caps.per_frame_trace);
+
+        // The payoff: with the trace filled, the relocated authority renderer
+        // (now in testsvm, reachable on the neutral transaction) draws a full
+        // graph for a quasar record, not the degraded mollusk-style one. A
+        // System transfer is `payer --signs--> System --writes--> dest`.
+        let authority = tx.authority_graph_string();
+        assert!(
+            authority.contains("-->|signs|") && authority.contains("-->|writes|"),
+            "quasar's transaction renders a full authority graph:\n{authority}"
+        );
     }
 
     #[test]
