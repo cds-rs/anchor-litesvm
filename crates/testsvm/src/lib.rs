@@ -17,6 +17,7 @@ pub mod frame;
 pub mod instructions;
 pub mod model;
 pub mod report;
+mod style;
 pub mod token;
 pub mod trace;
 

@@ -21,7 +21,7 @@ mod ownership;
 mod render_api;
 mod renderer;
 mod signers;
-mod style;
+pub(crate) use crate::style;
 #[cfg(test)]
 mod test_support;
 mod tree;
