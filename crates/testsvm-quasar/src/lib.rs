@@ -67,6 +67,11 @@ impl QuasarBackend {
     }
 }
 
+/// quasar-svm surfaces frame failures through the runtime's logs (the CPI tree
+/// and the per-frame trace are both derived from its execution record), so the
+/// default Anchor `Error Code:` decode applies; no override.
+impl model::FailureResolver for QuasarBackend {}
+
 impl TestSVM for QuasarBackend {
     fn send(&mut self, ixs: &[Instruction], signers: &[&Keypair]) -> model::Transaction {
         // quasar-svm only deconstructs and commits accounts that were in its
@@ -158,6 +163,7 @@ impl TestSVM for QuasarBackend {
             return_data,
             &self.instruction_names,
             &self.error_names,
+            self,
             self.aliases.clone(),
             // quasar-svm emits events as `Program data:` logs (sol_log_data);
             // the registry the test populated rides along so the rendered tree

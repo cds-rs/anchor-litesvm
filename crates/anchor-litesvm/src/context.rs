@@ -975,6 +975,10 @@ impl AnchorContext {
 /// the in-memory `svm`, except `send`, which routes through a configured backend
 /// when present and otherwise extracts a record from the svm via
 /// [`TransactionResult::into_model`] (the same path `LiteSvmBackend::send` takes).
+/// The Anchor-over-litesvm context surfaces frame failures as the runtime's own
+/// logs, so the default Anchor `Error Code:` decode applies; no override.
+impl model::FailureResolver for AnchorContext {}
+
 impl TestSVM for AnchorContext {
     fn send(&mut self, ixs: &[Instruction], signers: &[&Keypair]) -> model::Transaction {
         if let Some(backend) = self.backend.as_mut() {
@@ -989,6 +993,7 @@ impl TestSVM for AnchorContext {
             trace,
             &self.instruction_names,
             &self.error_names,
+            self,
             self.aliases.clone(),
             self.event_registry.clone(),
         )

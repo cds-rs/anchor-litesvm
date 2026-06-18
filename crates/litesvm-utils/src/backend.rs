@@ -65,6 +65,7 @@ impl TransactionResult {
         trace: Option<crate::transaction::InstructionTrace>,
         instruction_names: &testsvm::instructions::InstructionNames,
         error_names: &testsvm::errors::ErrorNames,
+        failure_resolver: &dyn model::FailureResolver,
         aliases: testsvm::aliases::Aliases,
         events: testsvm::events::EventRegistry,
     ) -> model::Transaction {
@@ -79,6 +80,7 @@ impl TransactionResult {
             None,
             instruction_names,
             error_names,
+            failure_resolver,
             aliases,
             events,
         )
@@ -154,6 +156,10 @@ impl LiteSvmBackend {
     }
 }
 
+/// In-memory litesvm surfaces frame failures as the runtime's own logs, so the
+/// default Anchor `Error Code:` decode is exactly right; no override.
+impl model::FailureResolver for LiteSvmBackend {}
+
 impl TestSVM for LiteSvmBackend {
     fn send(&mut self, ixs: &[Instruction], signers: &[&Keypair]) -> model::Transaction {
         let result = self
@@ -165,6 +171,7 @@ impl TestSVM for LiteSvmBackend {
             trace,
             &self.instruction_names,
             &self.error_names,
+            self,
             self.aliases.clone(),
             self.events.clone(),
         )
@@ -320,6 +327,12 @@ mod rpc_backend {
         }
     }
 
+    /// A stock RPC hands back frame failures in the same logs litesvm does (the
+    /// CPI tree is parsed from them), so the default Anchor decode applies. The
+    /// engine-specific surface is the *tx-level* `error` (a `TransactionError`
+    /// string), normalized in [`send`](TestSVM::send), not here.
+    impl model::FailureResolver for RpcBackend {}
+
     impl TestSVM for RpcBackend {
         fn send(&mut self, ixs: &[Instruction], signers: &[&Keypair]) -> model::Transaction {
             let payer = signers[0];
@@ -365,6 +378,7 @@ mod rpc_backend {
                 None,
                 &self.instruction_names,
                 &self.error_names,
+                self,
                 self.aliases.clone(),
                 self.events.clone(),
             )

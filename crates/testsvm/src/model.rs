@@ -5,10 +5,47 @@
 //! `solana_transaction::Transaction`.
 
 use {
-    crate::{aliases::Aliases, frame::Frame, trace::InstructionTrace},
+    crate::{
+        aliases::Aliases,
+        frame::{Frame, FrameLog},
+        trace::InstructionTrace,
+    },
     solana_message::Message,
     solana_pubkey::Pubkey,
 };
+
+/// Producer-side resolution of a failed frame's display name from the signal a
+/// frame carries: its `logs` (where an Anchor program writes its
+/// `Error Code: <Name>` line) and the runtime's `raw` message. The provided
+/// method resolves the Anchor line (plus the offending account when Anchor
+/// names one), which is log-sourced and so identical on every engine; that
+/// universality is why it's a default rather than per-backend boilerplate.
+///
+/// Each backend implements this trait. The default fits every engine whose
+/// frame failures reach us as the runtime's own logs (litesvm, mollusk,
+/// quasar); a backend whose engine expresses failures differently (an RPC that
+/// only hands back a `TransactionError` string, say) overrides
+/// [`resolve_frame_failure`](Self::resolve_frame_failure) to normalize its own
+/// surface. The [`ErrorNames`](crate::errors::ErrorNames) registry is a
+/// separate, engine-neutral tier consulted *after* this one (see
+/// [`assemble`](Transaction::assemble)), so a bare-code Pinocchio failure still
+/// resolves by name without a resolver override.
+pub trait FailureResolver {
+    /// Resolve `logs` + the `raw` runtime message into a frame's display name,
+    /// or `None` to fall through to the registry tier and then the raw message.
+    /// `raw` is the runtime's message for the frame (the default ignores it; an
+    /// override that normalizes engine-specific error text reads it).
+    fn resolve_frame_failure(&self, logs: &[FrameLog], raw: Option<&str>) -> Option<String> {
+        let _ = raw;
+        resolve_anchor_failure(logs)
+    }
+}
+
+/// The default resolver, for the assembly call sites that have no backend in
+/// hand (the litesvm `TransactionResult` re-render path and the model unit
+/// tests). Carries only the provided Anchor decode.
+pub struct AnchorFailures;
+impl FailureResolver for AnchorFailures {}
 
 /// What an engine witnessed about one transaction.
 #[derive(Debug, Clone)]
@@ -71,10 +108,18 @@ impl Transaction {
         return_data: Option<Vec<u8>>,
         instruction_names: &crate::instructions::InstructionNames,
         error_names: &crate::errors::ErrorNames,
+        failure_resolver: &dyn FailureResolver,
         aliases: Aliases,
         events: crate::events::EventRegistry,
     ) -> Self {
         name_top_level_frames(&mut frames, &message, instruction_names);
+        // Failure naming runs in two tiers, best name first: the backend's
+        // resolver (the Anchor `Error Code:` line by default) rewrites the
+        // message to a name, then the registry tier resolves any frame still
+        // carrying a bare `custom program error: 0x<code>`. The order is what
+        // gives Anchor precedence over the registry; a frame the resolver named
+        // no longer matches the custom-code shape, so the registry skips it.
+        resolve_failed_frames(&mut frames, failure_resolver);
         name_failed_frames(&mut frames, error_names);
         Self {
             account_keys: message.account_keys.clone(),
@@ -148,6 +193,100 @@ pub fn name_failed_frames(frames: &mut [crate::frame::Frame], errors: &crate::er
         }
         name_failed_frames(&mut frame.children, errors);
     }
+}
+
+/// Producer-side failure naming, resolver tier: walk every frame and let
+/// `resolver` rewrite a failed frame's message from the signal it carries
+/// (its logs, by default the Anchor `Error Code:` line). Runs ahead of
+/// [`name_failed_frames`]; a frame named here no longer matches the bare
+/// `custom program error: 0x<code>` shape, so the registry tier leaves it
+/// alone, which is how Anchor names take precedence over the registry.
+pub fn resolve_failed_frames(frames: &mut [Frame], resolver: &dyn FailureResolver) {
+    for frame in frames {
+        if let crate::frame::Outcome::Failed { message } = &mut frame.outcome {
+            if let Some(name) = resolver.resolve_frame_failure(&frame.logs, message.as_deref()) {
+                *message = Some(name);
+            }
+        }
+        resolve_failed_frames(&mut frame.children, resolver);
+    }
+}
+
+/// Lift the friendly error name out of an Anchor-thrown error log when present,
+/// plus the offending account when Anchor names one: a constraint failure
+/// renders as `AccountNotSigner on authority` (the extra entropy a failed frame
+/// can carry without cluttering the happy path), a `require!` failure stays just
+/// `EscrowExpired`. `None` for non-Anchor failures, so the caller falls back to
+/// the registry tier and then the runtime message. This is the default
+/// [`FailureResolver`] body, log-sourced and so identical on every engine.
+pub fn resolve_anchor_failure(logs: &[FrameLog]) -> Option<String> {
+    let name = extract_anchor_error_name(logs)?;
+    match extract_anchor_error_account(logs) {
+        Some(account) => Some(format!("{name} on {account}")),
+        None => Some(name),
+    }
+}
+
+/// Anchor's `#[error_code]` macro emits a structured log line on failure:
+///
+/// ```text
+/// AnchorError thrown in <file>:<line>. Error Code: <Name>. Error Number: 6000. Error Message: <Name>.
+/// ```
+///
+/// (Other variants: `AnchorError caused by account: ...`, `AnchorError
+/// occurred. ...`. All carry the `Error Code: <Name>.` segment.) Returns `None`
+/// for non-Anchor failures or a missing/malformed line.
+fn extract_anchor_error_name(logs: &[FrameLog]) -> Option<String> {
+    for entry in logs {
+        let FrameLog::Msg(text) = entry else { continue };
+        if !text.starts_with("AnchorError") {
+            continue;
+        }
+        let Some(after_code) = text.split_once("Error Code: ").map(|(_, s)| s) else {
+            continue;
+        };
+        // The name terminates at the next `.` (Anchor's separator between
+        // `Error Code: <Name>` and `Error Number: <N>`).
+        let Some((name, _)) = after_code.split_once('.') else {
+            continue;
+        };
+        let trimmed = name.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
+        }
+    }
+    None
+}
+
+/// The account Anchor blames for a constraint failure, when its log names one:
+///
+/// ```text
+/// AnchorError caused by account: <field>. Error Code: <Name>. ...
+/// ```
+///
+/// Returns `None` for failure forms that name no account (a `require!`'s
+/// `thrown in <file>` form, native-program failures). Mirrors
+/// [`extract_anchor_error_name`]'s scanning rules.
+fn extract_anchor_error_account(logs: &[FrameLog]) -> Option<String> {
+    for entry in logs {
+        let FrameLog::Msg(text) = entry else { continue };
+        if !text.starts_with("AnchorError") {
+            continue;
+        }
+        let Some(after) = text.split_once("caused by account: ").map(|(_, s)| s) else {
+            continue;
+        };
+        // The field terminates at Anchor's next `.` separator (before
+        // `Error Code:`).
+        let Some((field, _)) = after.split_once('.') else {
+            continue;
+        };
+        let trimmed = field.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
+        }
+    }
+    None
 }
 
 /// Producer-side naming: fill each top-level frame's `instruction_name` from

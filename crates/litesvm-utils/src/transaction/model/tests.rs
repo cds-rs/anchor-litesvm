@@ -392,6 +392,7 @@ fn from_transaction_sources_inner_accounts_and_names_from_the_trace() {
         None,
         &Default::default(),
         &Default::default(),
+        &testsvm::model::AnchorFailures,
         testsvm::aliases::Aliases::default(),
         Default::default(),
     );

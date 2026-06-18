@@ -66,6 +66,11 @@ impl MolluskBackend {
     }
 }
 
+/// Mollusk surfaces frame failures through the runtime's logs (the CPI tree is
+/// parsed from them), so the default Anchor `Error Code:` decode applies; no
+/// override.
+impl model::FailureResolver for MolluskBackend {}
+
 impl TestSVM for MolluskBackend {
     fn send(&mut self, ixs: &[Instruction], signers: &[&Keypair]) -> model::Transaction {
         // Fresh collector per send, so logs do not accumulate across sends.
@@ -101,6 +106,7 @@ impl TestSVM for MolluskBackend {
             return_data,
             &self.instruction_names,
             &self.error_names,
+            self,
             self.aliases.clone(),
             // Mollusk's instruction-level harness doesn't surface events; the
             // socket default is a no-op, so the registry rides empty.
