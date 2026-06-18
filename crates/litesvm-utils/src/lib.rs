@@ -170,7 +170,6 @@ pub mod backend;
 pub mod builder;
 pub mod metaplex;
 pub mod observe;
-pub mod report;
 pub mod test_helpers;
 pub mod token_hooks;
 pub mod tokens;
@@ -190,7 +189,12 @@ pub use observe::{
     CpiForest, CpiTree, ExecutionMetadata, ExecutionObserver, ExecutionView, Observed, ObservedSvm,
     ObserverRegistry, SignerAuthority,
 };
-pub use report::{ActBuilder, MarkdownBlock, Report, ToMarkdown};
+// `report` is engine-neutral test-output vocabulary; it lives on the spine now.
+// Re-exported (module + types + the `md_*` macros) so the old `litesvm_utils`
+// paths keep resolving for the book and dogfooders.
+pub use testsvm::report;
+pub use testsvm::report::{ActBuilder, MarkdownBlock, Report, ToMarkdown};
+pub use testsvm::{md_kv, md_table};
 pub use test_helpers::TestHelpers;
 pub use testsvm::{model, Capabilities, TestSVM};
 pub use token_hooks::TransferHookTesting;

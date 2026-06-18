@@ -16,6 +16,7 @@ pub mod events;
 pub mod frame;
 pub mod instructions;
 pub mod model;
+pub mod report;
 pub mod token;
 pub mod trace;
 

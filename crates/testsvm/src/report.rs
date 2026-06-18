@@ -8,17 +8,16 @@
 //! same number the test asserted on, so the report can't quietly disagree with
 //! the code the way a stale comment can. Prose can drift; observed values can't.
 //!
-//! This complements [`print_markdown_pair`] rather than replacing it. That
-//! method renders one *transaction* (its instruction + logs); a `Report`
-//! renders one *scenario*: the intent, the before/after state, and the
-//! pass/fail checks, as a single committable document per test.
+//! This complements `print_markdown_pair` (the per-transaction renderer on the
+//! litesvm `TransactionResult`) rather than replacing it. That method renders
+//! one *transaction* (its instruction + logs); a `Report` renders one
+//! *scenario*: the intent, the before/after state, and the pass/fail checks, as
+//! a single committable document per test.
 //!
 //! This module is domain-agnostic: it knows nothing about your program's
 //! accounts. Domain types earn a place in a report by implementing
 //! [`ToMarkdown`]; assemble the per-scenario files (one per test, named by a
 //! slug of the title) into a single document with a `just`-style concat step.
-//!
-//! [`print_markdown_pair`]: crate::transaction::TransactionResult::print_markdown_pair
 
 use std::fmt::{Debug, Write as _};
 use std::path::{Path, PathBuf};
@@ -205,7 +204,7 @@ fn fences_balanced(s: &str) -> bool {
 /// hand-written `.to_string()`.
 ///
 /// ```
-/// # use litesvm_utils::md_kv;
+/// # use testsvm::md_kv;
 /// let _block = md_kv! {
 ///     "transaction succeeded" => true,
 ///     "fee (lamports)"        => 5_000u64,
@@ -227,7 +226,7 @@ macro_rules! md_kv {
 /// per-cell `.to_string()`.
 ///
 /// ```
-/// # use litesvm_utils::md_table;
+/// # use testsvm::md_table;
 /// let _block = md_table! {
 ///     "item",  "before", "after";
 ///     "fee",   0u64,     4_000u64;
@@ -411,7 +410,7 @@ impl Report {
     /// stays a single well-formed disclosure.
     ///
     /// ```no_run
-    /// # use litesvm_utils::{Report, MarkdownBlock};
+    /// # use testsvm::report::{Report, MarkdownBlock};
     /// # let mut md = Report::new("t", "i");
     /// md.act("Act 1: open the session", |a| {
     ///     a.note("Alice opens the vault, Bob funds it.");
@@ -441,7 +440,7 @@ impl Report {
     /// surfaces; this call does not itself panic, which would mask that flip.
     ///
     /// ```no_run
-    /// # use litesvm_utils::Report;
+    /// # use testsvm::report::Report;
     /// #[should_panic(expected = "Transaction failed")]
     /// # fn _example() {
     /// let mut md = Report::new("Stake re-freezes the asset", "known bug, fix pending");
