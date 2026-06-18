@@ -571,3 +571,892 @@ pub(super) fn mermaid_id(name: &str) -> String {
 fn escape_message(msg: &str) -> String {
     msg.lines().next().unwrap_or("").trim_end().to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use {
+        super::*,
+        crate::cpi::test_support::{render_model, RenderInput},
+        crate::cpi::EventRegistry,
+        solana_pubkey::Pubkey,
+        std::str::FromStr,
+    };
+
+    /// Build the model from `logs` (+ optional inner-frame data, for the name
+    /// decode) and render it as Mermaid. The construction goes through the
+    /// neutral [`from_transaction`](crate::cpi::model::from_transaction) path
+    /// (split out into [`render_model`]); this drives the renderer over the
+    /// resulting [`CpiModel`].
+    fn render_with(
+        logs: &[String],
+        inner_data: &[Vec<u8>],
+        aliases: &crate::aliases::Aliases,
+        per_root: Vec<Vec<Pubkey>>,
+        tx_signers: Vec<Pubkey>,
+        mode: Mode,
+    ) -> String {
+        render_with_logs(logs, inner_data, aliases, per_root, tx_signers, mode, false)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn render_with_logs(
+        logs: &[String],
+        inner_data: &[Vec<u8>],
+        aliases: &crate::aliases::Aliases,
+        per_root: Vec<Vec<Pubkey>>,
+        tx_signers: Vec<Pubkey>,
+        mode: Mode,
+        include_logs: bool,
+    ) -> String {
+        let model = render_model(RenderInput {
+            logs,
+            inner_data,
+            per_root,
+            tx_signers,
+        });
+        let empty_events = EventRegistry::new();
+        let mut collector = super::super::renderer::LegendCollector::new(aliases, &empty_events);
+        render(&model, mode, include_logs, &mut collector)
+    }
+
+    #[test]
+    fn empty_log_stream_produces_empty_string() {
+        let out = render_with(
+            &[],
+            &[],
+            &crate::aliases::Aliases::default(),
+            vec![],
+            vec![],
+            Mode::Plain,
+        );
+        assert_eq!(out, "");
+    }
+
+    #[test]
+    fn single_top_level_frame_emits_signer_to_program_arrow() {
+        let amm_id = "CYbYnHW7SsnjGya616UuSintpEdezzJZCZuLZT6f2yf5";
+        let logs = vec![
+            format!("Program {amm_id} invoke [1]"),
+            "Program log: Instruction: Initialize".to_string(),
+            format!("Program {amm_id} consumed 4079 of 200000 compute units"),
+            format!("Program {amm_id} success"),
+        ];
+        let admin = Pubkey::new_unique();
+        let aliases = crate::aliases::Aliases::with_well_known()
+            .with(admin, "admin")
+            .with(Pubkey::from_str(amm_id).unwrap(), "amm");
+        let out = render_with(
+            &logs,
+            &[],
+            &aliases,
+            vec![vec![admin]],
+            vec![admin],
+            Mode::Plain,
+        );
+        let expected = "\
+```mermaid
+sequenceDiagram
+    autonumber
+    participant admin
+    participant amm
+    admin ->> amm: Initialize (4079cu)
+```
+";
+        assert_eq!(out, expected);
+    }
+
+    #[test]
+    fn nested_cpi_decodes_inner_instruction_names() {
+        let amm_id = "CYbYnHW7SsnjGya616UuSintpEdezzJZCZuLZT6f2yf5";
+        let logs = vec![
+            format!("Program {amm_id} invoke [1]"),
+            "Program log: Instruction: Swap".to_string(),
+            "Program 11111111111111111111111111111111 invoke [2]".to_string(),
+            "Program 11111111111111111111111111111111 success".to_string(),
+            format!("Program {amm_id} consumed 4079 of 200000 compute units"),
+            format!("Program {amm_id} success"),
+        ];
+        // The CPI is System::Transfer (4-byte LE tag 2). Inner-frame data in DFS
+        // order: root (none decodable) then the System child's transfer data.
+        let inner_data = vec![vec![], vec![2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]];
+        let admin = Pubkey::new_unique();
+        let aliases = crate::aliases::Aliases::with_well_known()
+            .with(admin, "admin")
+            .with(Pubkey::from_str(amm_id).unwrap(), "amm");
+        let out = render_with(
+            &logs,
+            &inner_data,
+            &aliases,
+            vec![vec![admin]],
+            vec![admin],
+            Mode::Plain,
+        );
+        assert!(
+            out.contains("admin ->> amm: Swap (4079cu)"),
+            "expected top-level arrow with CU; got:\n{out}"
+        );
+        assert!(
+            out.contains("amm ->> System: Transfer"),
+            "expected decoded System::Transfer CPI arrow; got:\n{out}"
+        );
+        // System frame has no CU line in the log, so no `(Ncu)` suffix.
+        assert!(
+            !out.contains("Transfer ("),
+            "System::Transfer should not carry a CU suffix; got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn failed_frame_emits_note_over_with_error() {
+        let amm_id = "CYbYnHW7SsnjGya616UuSintpEdezzJZCZuLZT6f2yf5";
+        // Anchor's custom error path: the program logs an error number and
+        // then the runtime reports failure. The upstream parser surfaces
+        // the message string on the failed frame.
+        let logs = vec![
+            format!("Program {amm_id} invoke [1]"),
+            "Program log: Instruction: Swap".to_string(),
+            "Program log: AnchorError thrown in programs/amm/src/instructions/swap.rs:42. Error Code: PoolLocked. Error Number: 6000. Error Message: PoolLocked.".to_string(),
+            format!("Program {amm_id} consumed 1000 of 200000 compute units"),
+            format!("Program {amm_id} failed: custom program error: 0x1770"),
+        ];
+        let admin = Pubkey::new_unique();
+        let aliases = crate::aliases::Aliases::with_well_known()
+            .with(admin, "admin")
+            .with(Pubkey::from_str(amm_id).unwrap(), "amm");
+        let out = render_with(
+            &logs,
+            &[],
+            &aliases,
+            vec![vec![admin]],
+            vec![admin],
+            Mode::Plain,
+        );
+        assert!(
+            out.contains("admin ->> amm: Swap (1000cu)"),
+            "expected swap arrow; got:\n{out}"
+        );
+        assert!(
+            out.contains("note over amm: ✗"),
+            "expected note over with failure marker; got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn failed_frame_with_children_renders_note_after_children() {
+        // Regression test for the chronology fix: Solana logs CPIs
+        // before the parent's post-CPI check fires, so the error note
+        // must come AFTER the children's call arrows. Mirrors the
+        // tree::render fix from commit e959b2d.
+        let escrow_id = "H1GjRKWSauAuupurDtGiY5uvhLBtUngNhvrSBs75rH9o";
+        let logs = vec![
+            format!("Program {escrow_id} invoke [1]"),
+            "Program log: Instruction: Take".to_string(),
+            "Program 11111111111111111111111111111111 invoke [2]".to_string(),
+            "Program 11111111111111111111111111111111 success".to_string(),
+            "Program log: AnchorError thrown ... Error Code: EscrowExpired. Error Number: 6000."
+                .to_string(),
+            format!("Program {escrow_id} consumed 5000 of 200000 compute units"),
+            format!("Program {escrow_id} failed: custom program error: 0x1770"),
+        ];
+        // The inner ix is System::CreateAccount (tag 0). DFS data: root, child.
+        let inner_data = vec![vec![], vec![0, 0, 0, 0]];
+        let taker = Pubkey::new_unique();
+        let aliases = crate::aliases::Aliases::with_well_known()
+            .with(taker, "Taker")
+            .with(Pubkey::from_str(escrow_id).unwrap(), "escrow");
+        let out = render_with(
+            &logs,
+            &inner_data,
+            &aliases,
+            vec![vec![taker]],
+            vec![taker],
+            Mode::Plain,
+        );
+
+        // Find the byte offsets of the three lines that must be in
+        // order: parent call, child call, note over.
+        let parent_call = out
+            .find("Taker ->> escrow: Take")
+            .expect("parent call missing");
+        let child_call = out
+            .find("escrow ->> System: CreateAccount")
+            .expect("child call missing");
+        let note_over = out.find("note over escrow: ✗").expect("error note missing");
+
+        assert!(
+            parent_call < child_call,
+            "parent call must precede child call; got:\n{out}"
+        );
+        assert!(
+            child_call < note_over,
+            "child call must precede error note; got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn multi_ix_tx_keeps_distinct_per_root_signers() {
+        let amm_id = "CYbYnHW7SsnjGya616UuSintpEdezzJZCZuLZT6f2yf5";
+        let logs = vec![
+            format!("Program {amm_id} invoke [1]"),
+            format!("Program {amm_id} success"),
+            format!("Program {amm_id} invoke [1]"),
+            format!("Program {amm_id} success"),
+        ];
+        let alice = Pubkey::new_unique();
+        let bob = Pubkey::new_unique();
+        let aliases = crate::aliases::Aliases::with_well_known()
+            .with(alice, "alice")
+            .with(bob, "bob")
+            .with(Pubkey::from_str(amm_id).unwrap(), "amm");
+        let out = render_with(
+            &logs,
+            &[],
+            &aliases,
+            vec![vec![alice], vec![bob]],
+            vec![alice, bob],
+            Mode::Plain,
+        );
+        assert!(
+            out.contains("participant alice"),
+            "expected alice participant; got:\n{out}"
+        );
+        assert!(
+            out.contains("participant bob"),
+            "expected bob participant; got:\n{out}"
+        );
+        assert!(
+            out.contains("alice ->> amm"),
+            "expected alice's arrow; got:\n{out}"
+        );
+        assert!(
+            out.contains("bob ->> amm"),
+            "expected bob's arrow; got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn unaliased_pubkey_uses_safe_id_with_display_alias() {
+        // No alias registered for the program. The pubkey's base58
+        // truncates to `<8>…<4>`, which contains the unicode ellipsis;
+        // the emitter must hide the ellipsis from the Mermaid id and
+        // surface the readable form via `participant Id as "display"`.
+        let amm_id = "CYbYnHW7SsnjGya616UuSintpEdezzJZCZuLZT6f2yf5";
+        let logs = vec![
+            format!("Program {amm_id} invoke [1]"),
+            format!("Program {amm_id} success"),
+        ];
+        // Only well-known aliases attached; the amm id stays unaliased.
+        let aliases = crate::aliases::Aliases::with_well_known();
+        let out = render_with(&logs, &[], &aliases, vec![], vec![], Mode::Plain);
+        // Display name "CYbYnHW7…2yf5" appears verbatim in an `as "..."`
+        // clause; Mermaid id replaces the `…` with `_`.
+        assert!(
+            out.contains("participant CYbYnHW7_2yf5 as \"CYbYnHW7…2yf5\""),
+            "expected sanitised id + readable display; got:\n{out}"
+        );
+        assert!(
+            out.contains("->> CYbYnHW7_2yf5: "),
+            "expected arrow target to use sanitised id; got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn lifelines_emits_activate_then_deactivate_with_cu_on_return() {
+        let amm_id = "CYbYnHW7SsnjGya616UuSintpEdezzJZCZuLZT6f2yf5";
+        let logs = vec![
+            format!("Program {amm_id} invoke [1]"),
+            "Program log: Instruction: Initialize".to_string(),
+            format!("Program {amm_id} consumed 4079 of 200000 compute units"),
+            format!("Program {amm_id} success"),
+        ];
+        let admin = Pubkey::new_unique();
+        let aliases = crate::aliases::Aliases::with_well_known()
+            .with(admin, "admin")
+            .with(Pubkey::from_str(amm_id).unwrap(), "amm");
+        let out = render_with(
+            &logs,
+            &[],
+            &aliases,
+            vec![vec![admin]],
+            vec![admin],
+            Mode::Lifelines,
+        );
+        let expected = "\
+```mermaid
+sequenceDiagram
+    autonumber
+    participant admin
+    participant amm
+    admin ->>+ amm: Initialize
+    amm -->>- admin: ok (4079cu)
+```
+";
+        assert_eq!(out, expected);
+    }
+
+    #[test]
+    fn lifelines_nests_children_inside_parent_activation() {
+        // The proof: in Lifelines mode, every child's activate+return
+        // pair must be sandwiched between the parent's CallActivate and
+        // the parent's Return. Order: parent-activate, child-activate,
+        // child-return, parent-return.
+        let amm_id = "CYbYnHW7SsnjGya616UuSintpEdezzJZCZuLZT6f2yf5";
+        let logs = vec![
+            format!("Program {amm_id} invoke [1]"),
+            "Program log: Instruction: Swap".to_string(),
+            "Program 11111111111111111111111111111111 invoke [2]".to_string(),
+            "Program 11111111111111111111111111111111 success".to_string(),
+            format!("Program {amm_id} consumed 4079 of 200000 compute units"),
+            format!("Program {amm_id} success"),
+        ];
+        let inner_data = vec![vec![], vec![2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]];
+        let admin = Pubkey::new_unique();
+        let aliases = crate::aliases::Aliases::with_well_known()
+            .with(admin, "admin")
+            .with(Pubkey::from_str(amm_id).unwrap(), "amm");
+        let out = render_with(
+            &logs,
+            &inner_data,
+            &aliases,
+            vec![vec![admin]],
+            vec![admin],
+            Mode::Lifelines,
+        );
+
+        let parent_activate = out
+            .find("admin ->>+ amm: Swap")
+            .expect("parent activate missing");
+        let child_activate = out
+            .find("amm ->>+ System: Transfer")
+            .expect("child activate missing");
+        let child_return = out
+            .find("System -->>- amm: ok")
+            .expect("child return missing");
+        let parent_return = out
+            .find("amm -->>- admin: ok (4079cu)")
+            .expect("parent return missing");
+
+        assert!(
+            parent_activate < child_activate,
+            "parent activate must precede child activate; got:\n{out}"
+        );
+        assert!(
+            child_activate < child_return,
+            "child activate must precede child return; got:\n{out}"
+        );
+        assert!(
+            child_return < parent_return,
+            "child return must precede parent return; got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn lifelines_failure_uses_lost_message_arrow_with_error_label() {
+        // Same fixture as failed_frame_with_children_renders_note_after_children,
+        // but in Lifelines mode the failure returns with `--x` (Mermaid's
+        // "lost message" arrow) carrying the error label, instead of
+        // emitting a separate `note over`.
+        let escrow_id = "H1GjRKWSauAuupurDtGiY5uvhLBtUngNhvrSBs75rH9o";
+        let logs = vec![
+            format!("Program {escrow_id} invoke [1]"),
+            "Program log: Instruction: Take".to_string(),
+            "Program 11111111111111111111111111111111 invoke [2]".to_string(),
+            "Program 11111111111111111111111111111111 success".to_string(),
+            format!("Program {escrow_id} consumed 5000 of 200000 compute units"),
+            format!("Program {escrow_id} failed: custom program error: 0x1770"),
+        ];
+        let inner_data = vec![vec![], vec![0, 0, 0, 0]];
+        let taker = Pubkey::new_unique();
+        let aliases = crate::aliases::Aliases::with_well_known()
+            .with(taker, "Taker")
+            .with(Pubkey::from_str(escrow_id).unwrap(), "escrow");
+        let out = render_with(
+            &logs,
+            &inner_data,
+            &aliases,
+            vec![vec![taker]],
+            vec![taker],
+            Mode::Lifelines,
+        );
+
+        assert!(
+            !out.contains("note over"),
+            "lifelines mode should not use `note over` for failures; got:\n{out}"
+        );
+        assert!(
+            out.contains("System -->>- escrow: ok"),
+            "successful child should return with -->>-; got:\n{out}"
+        );
+        assert!(
+            out.contains("escrow --x Taker: ✗ custom program error: 0x1770 (5000cu)"),
+            "failed parent should return with --x carrying the error; got:\n{out}"
+        );
+
+        // Child return must precede parent's error return.
+        let child_return = out
+            .find("System -->>- escrow: ok")
+            .expect("child return missing");
+        let parent_error_return = out
+            .find("escrow --x Taker:")
+            .expect("parent error return missing");
+        assert!(
+            child_return < parent_error_return,
+            "child return must precede parent error return; got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn plain_mode_wraps_only_the_error_note_in_red_rect() {
+        // The rect tightly wraps just the `note over` line, not the
+        // preceding call. Surrounding successful work stays untinted.
+        let escrow_id = "H1GjRKWSauAuupurDtGiY5uvhLBtUngNhvrSBs75rH9o";
+        let logs = vec![
+            format!("Program {escrow_id} invoke [1]"),
+            "Program log: Instruction: Take".to_string(),
+            format!("Program {escrow_id} consumed 1000 of 200000 compute units"),
+            format!("Program {escrow_id} failed: custom program error: 0x1770"),
+        ];
+        let taker = Pubkey::new_unique();
+        let aliases = crate::aliases::Aliases::with_well_known()
+            .with(taker, "Taker")
+            .with(Pubkey::from_str(escrow_id).unwrap(), "escrow");
+        let out = render_with(
+            &logs,
+            &[],
+            &aliases,
+            vec![vec![taker]],
+            vec![taker],
+            Mode::Plain,
+        );
+
+        let call = out.find("Taker ->> escrow: Take").expect("call missing");
+        let rect_open = out
+            .find("rect rgb(255, 220, 220)")
+            .expect("rect open missing");
+        let note = out.find("note over escrow: ✗").expect("note missing");
+        let rect_close = out.find("    end\n").expect("rect close missing");
+
+        // Call comes first, THEN the rect wraps only the note. The
+        // call line is outside the rect so it does not get tinted.
+        assert!(
+            call < rect_open,
+            "rect opens AFTER the call (failure-marker-only wrap); got:\n{out}"
+        );
+        assert!(rect_open < note, "rect opens before the note; got:\n{out}");
+        assert!(note < rect_close, "rect closes after the note; got:\n{out}");
+    }
+
+    #[test]
+    fn lifelines_mode_wraps_only_the_error_return_in_red_rect() {
+        // Lifelines variant of the same tight-wrap behavior. Children's
+        // ok-returns stay untinted; only the `--x` failure return is
+        // inside the rect.
+        let escrow_id = "H1GjRKWSauAuupurDtGiY5uvhLBtUngNhvrSBs75rH9o";
+        let logs = vec![
+            format!("Program {escrow_id} invoke [1]"),
+            "Program log: Instruction: Take".to_string(),
+            "Program 11111111111111111111111111111111 invoke [2]".to_string(),
+            "Program 11111111111111111111111111111111 success".to_string(),
+            format!("Program {escrow_id} consumed 5000 of 200000 compute units"),
+            format!("Program {escrow_id} failed: custom program error: 0x1770"),
+        ];
+        let inner_data = vec![vec![], vec![0, 0, 0, 0]];
+        let taker = Pubkey::new_unique();
+        let aliases = crate::aliases::Aliases::with_well_known()
+            .with(taker, "Taker")
+            .with(Pubkey::from_str(escrow_id).unwrap(), "escrow");
+        let out = render_with(
+            &logs,
+            &inner_data,
+            &aliases,
+            vec![vec![taker]],
+            vec![taker],
+            Mode::Lifelines,
+        );
+
+        let call_activate = out
+            .find("Taker ->>+ escrow: Take")
+            .expect("CallActivate missing");
+        let child_return = out
+            .find("System -->>- escrow: ok")
+            .expect("child return missing");
+        let rect_open = out
+            .find("rect rgb(255, 220, 220)")
+            .expect("rect open missing");
+        let error_return = out
+            .find("escrow --x Taker: ✗")
+            .expect("error return missing");
+        let rect_close = out.find("    end\n").expect("rect close missing");
+
+        // Order: CallActivate < child_return < rect_open < error_return
+        // < rect_close. The successful child return is OUTSIDE the
+        // rect, which is the whole point of the tight wrap.
+        assert!(
+            call_activate < child_return,
+            "CallActivate < child return; got:\n{out}"
+        );
+        assert!(
+            child_return < rect_open,
+            "child return is OUTSIDE the rect (no false-failure tint); got:\n{out}"
+        );
+        assert!(
+            rect_open < error_return,
+            "rect opens before error return; got:\n{out}"
+        );
+        assert!(
+            error_return < rect_close,
+            "rect closes after error return; got:\n{out}"
+        );
+
+        // Single failed frame -> single rect pair.
+        assert_eq!(
+            out.matches("rect rgb").count(),
+            1,
+            "expected exactly one rect open; got:\n{out}"
+        );
+        assert_eq!(
+            out.matches("    end\n").count(),
+            1,
+            "expected exactly one rect close; got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn event_lines_always_render_to_initiator() {
+        // `Program data: <base64>` lines from the parser become FrameLog::Data
+        // entries; render must emit them as dashed arrows back to the tx
+        // initiator regardless of include_logs.
+        let escrow_id = "H1GjRKWSauAuupurDtGiY5uvhLBtUngNhvrSBs75rH9o";
+        let logs = vec![
+            format!("Program {escrow_id} invoke [1]"),
+            "Program log: Instruction: Make".to_string(),
+            "Program data: AAAAAAAAAAA=".to_string(),
+            format!("Program {escrow_id} consumed 5000 of 200000 compute units"),
+            format!("Program {escrow_id} success"),
+        ];
+        let maker = Pubkey::new_unique();
+        let aliases = crate::aliases::Aliases::with_well_known()
+            .with(maker, "Maker")
+            .with(Pubkey::from_str(escrow_id).unwrap(), "escrow");
+
+        // include_logs = false: event still renders.
+        let out = render_with_logs(
+            &logs,
+            &[],
+            &aliases,
+            vec![vec![maker]],
+            vec![maker],
+            Mode::Plain,
+            false,
+        );
+        assert!(
+            out.contains("escrow -->> Maker: 🔔 event: AAAAAAAAAAA="),
+            "expected event arrow even with logs off; got:\n{out}"
+        );
+
+        // include_logs = true: event still renders the same way.
+        let out2 = render_with_logs(
+            &logs,
+            &[],
+            &aliases,
+            vec![vec![maker]],
+            vec![maker],
+            Mode::Plain,
+            true,
+        );
+        assert!(
+            out2.contains("escrow -->> Maker: 🔔 event: AAAAAAAAAAA="),
+            "expected event arrow with logs on; got:\n{out2}"
+        );
+    }
+
+    #[test]
+    fn a_registered_event_renders_as_a_note_with_aliased_fields() {
+        use base64::{engine::general_purpose, Engine as _};
+        use std::sync::Arc;
+
+        let maker = Pubkey::new_unique();
+        let escrow = Pubkey::new_unique();
+
+        // A decoder whose formatted fields embed the maker's base58 key, so we
+        // can prove the renderer substitutes it for the alias.
+        let mut reg = EventRegistry::new();
+        let maker_b58 = maker.to_string();
+        reg.register(
+            [7u8; 8],
+            "Transfer",
+            Arc::new(move |_b: &[u8]| {
+                Some(vec![
+                    ("from".to_string(), maker_b58.clone()),
+                    ("amount".to_string(), "100".to_string()),
+                ])
+            }),
+        );
+        let mut raw = [7u8; 8].to_vec();
+        raw.extend_from_slice(&100u64.to_le_bytes());
+        let payload = general_purpose::STANDARD.encode(&raw);
+
+        let frame = crate::cpi::model::ResolvedFrame {
+            program: escrow,
+            instruction_name: Some("Make".to_string()),
+            outcome: crate::cpi::model::Outcome::Success,
+            compute_units: Some(5000),
+            accounts: vec![],
+            logs: vec![crate::cpi::model::FrameLog::Data(payload)],
+            data: vec![],
+            children: vec![],
+        };
+        let model = crate::cpi::model::CpiModel {
+            header: None,
+            roots: vec![crate::cpi::model::Root {
+                signers: vec![maker],
+                frame,
+            }],
+            tx_signers: vec![maker],
+            error: None,
+            compute_units: 5000,
+            fee: 0,
+            events: reg,
+        };
+        let aliases = crate::aliases::Aliases::with_well_known()
+            .with(maker, "maker")
+            .with(escrow, "escrow");
+
+        let out = MermaidRenderer {
+            mode: Mode::Plain,
+            include_logs: false,
+        }
+        .render(&model, &aliases);
+
+        // A `note over <emitter>`, not an arrow, carrying the decoded name...
+        assert!(
+            out.contains("note over escrow: 🔔 Transfer"),
+            "expected a decoded event note; got:\n{out}"
+        );
+        // ...with the field pubkey substituted to its alias, not raw base58.
+        assert!(
+            out.contains("from: maker"),
+            "alias not substituted; got:\n{out}"
+        );
+        assert!(
+            !out.contains(&maker.to_string()),
+            "raw base58 leaked into the note; got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn log_lines_only_render_when_include_logs_is_true() {
+        let escrow_id = "H1GjRKWSauAuupurDtGiY5uvhLBtUngNhvrSBs75rH9o";
+        let logs = vec![
+            format!("Program {escrow_id} invoke [1]"),
+            "Program log: Instruction: Make".to_string(),
+            "Program log: Funded vault with 1000 mint_a".to_string(),
+            format!("Program {escrow_id} consumed 5000 of 200000 compute units"),
+            format!("Program {escrow_id} success"),
+        ];
+        let maker = Pubkey::new_unique();
+        let aliases = crate::aliases::Aliases::with_well_known()
+            .with(maker, "Maker")
+            .with(Pubkey::from_str(escrow_id).unwrap(), "escrow");
+
+        // include_logs = false: no log arrow.
+        let out_off = render_with_logs(
+            &logs,
+            &[],
+            &aliases,
+            vec![vec![maker]],
+            vec![maker],
+            Mode::Plain,
+            false,
+        );
+        assert!(
+            !out_off.contains("💬 log:"),
+            "log arrow should be absent when include_logs=false; got:\n{out_off}"
+        );
+
+        // include_logs = true: log arrow appears, pointing back to Maker.
+        let out_on = render_with_logs(
+            &logs,
+            &[],
+            &aliases,
+            vec![vec![maker]],
+            vec![maker],
+            Mode::Plain,
+            true,
+        );
+        assert!(
+            out_on.contains("escrow -->> Maker: 💬 log: Funded vault with 1000 mint_a"),
+            "expected log arrow when include_logs=true; got:\n{out_on}"
+        );
+    }
+
+    #[test]
+    fn instruction_dispatcher_announcement_is_not_rendered_as_a_log() {
+        // The parser treats `Program log: Instruction: <Name>` as the
+        // dispatcher announcement and strips prior Msg entries from the
+        // frame's logs. We don't want to render the `Instruction:` line
+        // itself either; it would duplicate the call label.
+        let escrow_id = "H1GjRKWSauAuupurDtGiY5uvhLBtUngNhvrSBs75rH9o";
+        let logs = vec![
+            format!("Program {escrow_id} invoke [1]"),
+            "Program log: Instruction: Make".to_string(),
+            format!("Program {escrow_id} consumed 5000 of 200000 compute units"),
+            format!("Program {escrow_id} success"),
+        ];
+        let maker = Pubkey::new_unique();
+        let aliases = crate::aliases::Aliases::with_well_known()
+            .with(maker, "Maker")
+            .with(Pubkey::from_str(escrow_id).unwrap(), "escrow");
+
+        // With include_logs=true: still no log arrow, because the parser
+        // never put the `Instruction:` line into frame.logs in the
+        // first place (it consumed it for instruction_name decoding).
+        let out = render_with_logs(
+            &logs,
+            &[],
+            &aliases,
+            vec![vec![maker]],
+            vec![maker],
+            Mode::Plain,
+            true,
+        );
+        assert!(
+            !out.contains("💬 log:"),
+            "Instruction: line must not surface as a log arrow; got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn long_event_payloads_truncate_with_ellipsis() {
+        let escrow_id = "H1GjRKWSauAuupurDtGiY5uvhLBtUngNhvrSBs75rH9o";
+        let long_payload = "A".repeat(EVENT_LABEL_MAX + 30);
+        let logs = vec![
+            format!("Program {escrow_id} invoke [1]"),
+            "Program log: Instruction: Make".to_string(),
+            format!("Program data: {long_payload}"),
+            format!("Program {escrow_id} success"),
+        ];
+        let maker = Pubkey::new_unique();
+        let aliases = crate::aliases::Aliases::with_well_known()
+            .with(maker, "Maker")
+            .with(Pubkey::from_str(escrow_id).unwrap(), "escrow");
+        let out = render_with_logs(
+            &logs,
+            &[],
+            &aliases,
+            vec![vec![maker]],
+            vec![maker],
+            Mode::Plain,
+            false,
+        );
+        let expected_prefix = "A".repeat(EVENT_LABEL_MAX);
+        assert!(
+            out.contains(&format!("🔔 event: {expected_prefix}…")),
+            "expected truncation at {EVENT_LABEL_MAX} chars; got:\n{out}"
+        );
+        // The full payload (longer) must NOT appear in the output.
+        assert!(
+            !out.contains(&long_payload),
+            "untruncated payload leaked through; got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn failure_label_prefers_anchor_error_name_over_runtime_message() {
+        // The Anchor log line carries `Error Code: EscrowExpired`; the
+        // runtime reports `custom program error: 0x1770` separately.
+        // The mermaid label should use the friendly name in BOTH the
+        // Plain `note over` line and the Lifelines `--x` line.
+        let escrow_id = "H1GjRKWSauAuupurDtGiY5uvhLBtUngNhvrSBs75rH9o";
+        let logs = vec![
+            format!("Program {escrow_id} invoke [1]"),
+            "Program log: Instruction: Take".to_string(),
+            "Program log: AnchorError thrown in programs/escrow/src/instructions/take.rs:42. Error Code: EscrowExpired. Error Number: 6000. Error Message: EscrowExpired."
+                .to_string(),
+            format!("Program {escrow_id} consumed 5000 of 200000 compute units"),
+            format!("Program {escrow_id} failed: custom program error: 0x1770"),
+        ];
+        let taker = Pubkey::new_unique();
+        let aliases = crate::aliases::Aliases::with_well_known()
+            .with(taker, "Taker")
+            .with(Pubkey::from_str(escrow_id).unwrap(), "escrow");
+
+        let plain = render_with(
+            &logs,
+            &[],
+            &aliases,
+            vec![vec![taker]],
+            vec![taker],
+            Mode::Plain,
+        );
+        assert!(
+            plain.contains("note over escrow: ✗ EscrowExpired"),
+            "Plain mode should use the Anchor name in note over; got:\n{plain}"
+        );
+        assert!(
+            !plain.contains("custom program error: 0x1770"),
+            "raw runtime message should be suppressed when name available; got:\n{plain}"
+        );
+
+        let lifelines = render_with(
+            &logs,
+            &[],
+            &aliases,
+            vec![vec![taker]],
+            vec![taker],
+            Mode::Lifelines,
+        );
+        assert!(
+            lifelines.contains("escrow --x Taker: ✗ EscrowExpired (5000cu)"),
+            "Lifelines mode should use the Anchor name in --x label; got:\n{lifelines}"
+        );
+        assert!(
+            !lifelines.contains("custom program error: 0x1770"),
+            "raw runtime message should be suppressed when name available; got:\n{lifelines}"
+        );
+    }
+
+    #[test]
+    fn no_signers_falls_back_to_user_placeholder() {
+        let amm_id = "CYbYnHW7SsnjGya616UuSintpEdezzJZCZuLZT6f2yf5";
+        let logs = vec![
+            format!("Program {amm_id} invoke [1]"),
+            format!("Program {amm_id} success"),
+        ];
+        let aliases =
+            crate::aliases::Aliases::with_well_known().with(Pubkey::from_str(amm_id).unwrap(), "amm");
+        let out = render_with(&logs, &[], &aliases, vec![], vec![], Mode::Plain);
+        assert!(
+            out.contains("participant User"),
+            "expected User placeholder participant; got:\n{out}"
+        );
+        assert!(
+            out.contains("User ->> amm"),
+            "expected User-sourced arrow; got:\n{out}"
+        );
+    }
+
+    #[test]
+    fn undecoded_instruction_renders_safe_label_not_bare_question_mark() {
+        // A bare `?` mermaid message (undecoded name, no cu suffix to pad it)
+        // fails to parse on GitHub and drops the whole diagram to raw text.
+        // The label must be a non-empty word instead. Reported via dogfood
+        // on a transaction carrying a ComputeBudget instruction.
+        let prog = "CYbYnHW7SsnjGya616UuSintpEdezzJZCZuLZT6f2yf5";
+        let logs = vec![
+            format!("Program {prog} invoke [1]"),
+            format!("Program {prog} success"),
+        ];
+        let aliases = crate::aliases::Aliases::with_well_known()
+            .with(Pubkey::from_str(prog).unwrap(), "prog");
+        let out = render_with(&logs, &[], &aliases, vec![], vec![], Mode::Plain);
+        assert!(
+            out.contains(": unnamed"),
+            "undecoded label should read `unnamed`; got:\n{out}"
+        );
+        assert!(
+            !out.contains(": ?"),
+            "a bare `: ?` mermaid label breaks GitHub rendering; got:\n{out}"
+        );
+    }
+}

@@ -1061,6 +1061,59 @@ mod tests {
     }
 
     #[test]
+    fn registered_event_renders_in_tree_with_labeled_fields() {
+        // Labeler x event x tree, end to end: a `Program data:` payload decodes
+        // through the registry, and a base58 key embedded in a field is
+        // substituted to its alias by the labeler the tree threads through.
+        use {
+            crate::aliases::Aliases, crate::events::EventRegistry, base64::Engine as _,
+            std::sync::Arc,
+        };
+
+        let maker = Pubkey::new_unique();
+        let escrow = Pubkey::new_unique();
+
+        // A decoder whose `from` field embeds the maker's base58 key.
+        let mut events = EventRegistry::new();
+        let maker_b58 = maker.to_string();
+        events.register(
+            [9u8; 8],
+            "Transfer",
+            Arc::new(move |_b: &[u8]| {
+                Some(vec![
+                    ("from".to_string(), maker_b58.clone()),
+                    ("amount".to_string(), "100".to_string()),
+                ])
+            }),
+        );
+        let mut raw = [9u8; 8].to_vec();
+        raw.extend_from_slice(&100u64.to_le_bytes());
+        let payload = base64::engine::general_purpose::STANDARD.encode(&raw);
+
+        let frames = vec![Frame {
+            program_id: escrow,
+            outcome: Outcome::Success,
+            compute_units: None,
+            instruction_name: Some("Make".to_string()),
+            logs: vec![FrameLog::Data(payload)],
+            children: vec![],
+        }];
+        let aliases = Aliases::default().with(maker, "maker").with(escrow, "Escrow");
+
+        let out = format_cpi_tree_with_events("CPI Tree:", &frames, &aliases, &events);
+
+        assert!(out.contains("🔔 Transfer"), "decoded event badge; got:\n{out}");
+        assert!(
+            out.contains("from: maker"),
+            "the embedded key is substituted to its alias; got:\n{out}"
+        );
+        assert!(
+            !out.contains(&maker.to_string()),
+            "raw base58 leaked into the tree; got:\n{out}"
+        );
+    }
+
+    #[test]
     fn transaction_total_cu_does_not_double_count_children() {
         // Per-frame `consumed` is cumulative in Solana: the parent's value
         // already includes any CPI children's consumption (verified against

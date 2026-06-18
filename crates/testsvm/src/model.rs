@@ -166,6 +166,28 @@ impl Transaction {
             &self.events,
         )
     }
+
+    /// Every failed frame's resolved message, in DFS pre-order. The resolution
+    /// (the Anchor `Error Code:` name, or a registered error name) already
+    /// happened in [`assemble`](Self::assemble), so this carries the *named*
+    /// failure even though only the raw `0x<code>` appears in the logs; an
+    /// error-name assertion matches against it.
+    pub fn failure_messages(&self) -> Vec<String> {
+        fn walk(frames: &[Frame], out: &mut Vec<String>) {
+            for frame in frames {
+                if let crate::frame::Outcome::Failed {
+                    message: Some(message),
+                } = &frame.outcome
+                {
+                    out.push(message.clone());
+                }
+                walk(&frame.children, out);
+            }
+        }
+        let mut out = Vec::new();
+        walk(&self.frames, &mut out);
+        out
+    }
 }
 
 /// Producer-side error naming: walk every frame (failures live at any depth)
@@ -376,6 +398,235 @@ mod tests {
                 _ => None,
             },
             Some("InvalidAmount (0x7)"),
+        );
+    }
+
+    // ---- Anchor-error log extraction --------------------------------------
+    // The producer-side resolution every engine shares, log-sourced so it is
+    // identical on litesvm / mollusk / quasar.
+
+    #[test]
+    fn extract_anchor_error_name_finds_thrown_form() {
+        let logs = vec![
+            FrameLog::Msg("Some unrelated msg".to_string()),
+            FrameLog::Msg(
+                "AnchorError thrown in programs/escrow/src/instructions/take.rs:42. Error Code: EscrowExpired. Error Number: 6000. Error Message: EscrowExpired."
+                    .to_string(),
+            ),
+        ];
+        assert_eq!(
+            extract_anchor_error_name(&logs).as_deref(),
+            Some("EscrowExpired")
+        );
+    }
+
+    #[test]
+    fn extract_anchor_error_name_finds_caused_by_account_form() {
+        // Anchor's constraint-failure variant uses a different prefix
+        // ("AnchorError caused by account: ..."), still carries the
+        // `Error Code: <Name>.` segment.
+        let logs = vec![FrameLog::Msg(
+            "AnchorError caused by account: vault. Error Code: ConstraintSeeds. Error Number: 2006. Error Message: A seeds constraint was violated."
+                .to_string(),
+        )];
+        assert_eq!(
+            extract_anchor_error_name(&logs).as_deref(),
+            Some("ConstraintSeeds")
+        );
+    }
+
+    #[test]
+    fn extract_anchor_error_name_returns_none_for_non_anchor_failures() {
+        // Failures from native programs / raw msg!() users have no
+        // AnchorError line.
+        let logs = vec![
+            FrameLog::Msg("Some user-level diagnostic".to_string()),
+            FrameLog::Msg("Program System failed: insufficient funds".to_string()),
+        ];
+        assert_eq!(extract_anchor_error_name(&logs), None);
+    }
+
+    #[test]
+    fn extract_anchor_error_name_ignores_data_entries() {
+        // Anchor events arrive as FrameLog::Data; the extractor only
+        // scans Msg entries, since AnchorError is always a Msg.
+        let logs = vec![FrameLog::Data(
+            "AnchorError thrown in foo.rs:1. Error Code: Spoofed. Error Number: 6000.".to_string(),
+        )];
+        assert_eq!(extract_anchor_error_name(&logs), None);
+    }
+
+    #[test]
+    fn extract_anchor_error_name_returns_first_when_multiple() {
+        // Nested failures (a child fails AND the parent fails because of it)
+        // can produce two AnchorError lines in one frame's logs. First-seen
+        // wins; matches the typical "leaf error is the one to report".
+        let logs = vec![
+            FrameLog::Msg(
+                "AnchorError thrown in inner.rs:1. Error Code: FirstError. Error Number: 6000."
+                    .to_string(),
+            ),
+            FrameLog::Msg(
+                "AnchorError thrown in outer.rs:1. Error Code: SecondError. Error Number: 6001."
+                    .to_string(),
+            ),
+        ];
+        assert_eq!(
+            extract_anchor_error_name(&logs).as_deref(),
+            Some("FirstError")
+        );
+    }
+
+    #[test]
+    fn extract_anchor_error_account_finds_the_offending_field() {
+        // Constraint failures name the account they blame; lift the field name
+        // (e.g. a transfer hook that declared `authority: Signer` and got a
+        // non-signer from the runtime).
+        let logs = vec![FrameLog::Msg(
+            "AnchorError caused by account: authority. Error Code: AccountNotSigner. Error Number: 3010. Error Message: The given account did not sign."
+                .to_string(),
+        )];
+        assert_eq!(
+            extract_anchor_error_account(&logs).as_deref(),
+            Some("authority")
+        );
+    }
+
+    #[test]
+    fn extract_anchor_error_account_is_none_when_no_account_named() {
+        // The `thrown in <file>` form (a `require!` failure) names no account.
+        let logs = vec![FrameLog::Msg(
+            "AnchorError thrown in programs/escrow/src/take.rs:42. Error Code: EscrowExpired. Error Number: 6000. Error Message: EscrowExpired."
+                .to_string(),
+        )];
+        assert_eq!(extract_anchor_error_account(&logs), None);
+    }
+
+    #[test]
+    fn resolve_anchor_failure_appends_the_offending_account() {
+        // Only on a failed frame, and only when an account is named, does the
+        // label gain the offending account: the signal the transfer-hook
+        // Signer bug needed.
+        let logs = vec![FrameLog::Msg(
+            "AnchorError caused by account: authority. Error Code: AccountNotSigner. Error Number: 3010. Error Message: The given account did not sign."
+                .to_string(),
+        )];
+        assert_eq!(
+            resolve_anchor_failure(&logs).as_deref(),
+            Some("AccountNotSigner on authority")
+        );
+    }
+
+    #[test]
+    fn resolve_anchor_failure_is_just_the_name_when_no_account() {
+        let logs = vec![FrameLog::Msg(
+            "AnchorError thrown in programs/escrow/src/take.rs:42. Error Code: EscrowExpired. Error Number: 6000. Error Message: EscrowExpired."
+                .to_string(),
+        )];
+        assert_eq!(
+            resolve_anchor_failure(&logs).as_deref(),
+            Some("EscrowExpired")
+        );
+    }
+
+    // ---- assemble() naming seam -------------------------------------------
+    // The central naming seam, exercised directly rather than via an adapter.
+
+    /// Drive [`Transaction::assemble`] with the defaults a unit test wants:
+    /// caller supplies frames + message + the name tables.
+    fn assemble_with(
+        frames: Vec<Frame>,
+        message: Message,
+        instruction_names: &crate::instructions::InstructionNames,
+        error_names: &crate::errors::ErrorNames,
+    ) -> Transaction {
+        Transaction::assemble(
+            frames,
+            message,
+            vec![],
+            None,
+            0,
+            None,
+            None,
+            None,
+            instruction_names,
+            error_names,
+            &AnchorFailures,
+            Aliases::with_well_known(),
+            Default::default(),
+        )
+    }
+
+    #[test]
+    fn assemble_names_a_top_level_frame_from_the_registry() {
+        // A top-level frame with no name gets one from the instruction registry,
+        // correlated by message-instruction order.
+        use solana_message::compiled_instruction::CompiledInstruction;
+        let program = Pubkey::new_unique();
+        let mut names = crate::instructions::InstructionNames::new();
+        names.register(program, vec![5, 0, 0, 0], "DoTheThing");
+
+        let message = Message {
+            account_keys: vec![program],
+            instructions: vec![CompiledInstruction {
+                program_id_index: 0,
+                accounts: vec![],
+                data: vec![5, 0, 0, 0],
+            }],
+            ..Default::default()
+        };
+        let frames = vec![Frame {
+            program_id: program,
+            outcome: crate::frame::Outcome::Success,
+            compute_units: None,
+            instruction_name: None,
+            logs: vec![],
+            children: vec![],
+        }];
+
+        let tx = assemble_with(frames, message, &names, &Default::default());
+        assert_eq!(
+            tx.frames[0].instruction_name.as_deref(),
+            Some("DoTheThing"),
+            "the top-level frame is named from the registry by ix order",
+        );
+    }
+
+    #[test]
+    fn assemble_resolves_a_failed_frame_to_its_registered_error_name() {
+        // A failed frame carrying a bare `custom program error: 0x<code>` is
+        // resolved to the program's registered error name (the registry tier,
+        // after the Anchor resolver tier finds nothing).
+        use solana_message::compiled_instruction::CompiledInstruction;
+        let program = Pubkey::new_unique();
+        let mut errors = crate::errors::ErrorNames::new();
+        errors.register(program, 7, "InvalidAmount");
+
+        let message = Message {
+            account_keys: vec![program],
+            instructions: vec![CompiledInstruction {
+                program_id_index: 0,
+                accounts: vec![],
+                data: vec![],
+            }],
+            ..Default::default()
+        };
+        let frames = vec![Frame {
+            program_id: program,
+            outcome: crate::frame::Outcome::Failed {
+                message: Some("custom program error: 0x7".into()),
+            },
+            compute_units: None,
+            instruction_name: None,
+            logs: vec![],
+            children: vec![],
+        }];
+
+        let tx = assemble_with(frames, message, &Default::default(), &errors);
+        assert_eq!(
+            tx.failure_messages(),
+            vec!["InvalidAmount (0x7)".to_string()],
+            "the failed frame resolves to its registered error name",
         );
     }
 }

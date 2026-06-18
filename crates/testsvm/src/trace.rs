@@ -70,3 +70,93 @@ impl InstructionTrace {
         found
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn acct(pubkey: Pubkey, is_signer: bool) -> TracedAccount {
+        TracedAccount {
+            pubkey,
+            is_signer,
+            is_writable: true,
+            owner: Pubkey::default(),
+        }
+    }
+
+    #[test]
+    fn program_signed_accounts_finds_invoke_signed_pdas() {
+        // A PDA that signs inside a CPI but is not a transaction-level signer
+        // was signed for by the program via `invoke_signed`. The payer is a tx
+        // signer (extended into the CPI), so it is not reported.
+        let payer = Pubkey::new_unique();
+        let pda = Pubkey::new_unique();
+        let passive = Pubkey::new_unique();
+
+        let trace = InstructionTrace(vec![
+            TracedInstruction {
+                program_id: Pubkey::new_unique(),
+                stack_height: 1,
+                accounts: vec![acct(payer, true), acct(passive, false)],
+                data: vec![],
+            },
+            TracedInstruction {
+                program_id: Pubkey::new_unique(),
+                stack_height: 2,
+                // The PDA signs here (invoke_signed); the payer's tx signature
+                // is extended in too.
+                accounts: vec![acct(pda, true), acct(payer, true)],
+                data: vec![],
+            },
+        ]);
+
+        assert_eq!(
+            trace.program_signed_accounts(&[payer]),
+            vec![pda],
+            "only the program-signed PDA, not the extended tx signer",
+        );
+    }
+
+    #[test]
+    fn program_signed_accounts_dedupes_and_skips_passive_accounts() {
+        // The same PDA signing in two frames is reported once; an account that
+        // never signs is never reported.
+        let pda = Pubkey::new_unique();
+        let passive = Pubkey::new_unique();
+        let trace = InstructionTrace(vec![
+            TracedInstruction {
+                program_id: Pubkey::new_unique(),
+                stack_height: 2,
+                accounts: vec![acct(pda, true), acct(passive, false)],
+                data: vec![],
+            },
+            TracedInstruction {
+                program_id: Pubkey::new_unique(),
+                stack_height: 2,
+                accounts: vec![acct(pda, true)],
+                data: vec![],
+            },
+        ]);
+
+        assert_eq!(
+            trace.program_signed_accounts(&[]),
+            vec![pda],
+            "a PDA signing across frames is reported once; passives are skipped",
+        );
+    }
+
+    #[test]
+    fn program_signed_accounts_empty_when_only_tx_signers_sign() {
+        // A transaction whose only signers are tx-level (a plain human-signed
+        // transfer) has no program-signed authority to report.
+        let payer = Pubkey::new_unique();
+        let recipient = Pubkey::new_unique();
+        let trace = InstructionTrace(vec![TracedInstruction {
+            program_id: Pubkey::new_unique(),
+            stack_height: 1,
+            accounts: vec![acct(payer, true), acct(recipient, false)],
+            data: vec![],
+        }]);
+        assert!(trace.program_signed_accounts(&[payer]).is_empty());
+    }
+}

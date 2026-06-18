@@ -81,3 +81,22 @@ impl Style {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn off_returns_input_unchanged() {
+        assert_eq!(Style::Off.green("✓"), "✓");
+        assert_eq!(Style::Off.red("✗"), "✗");
+        assert_eq!(Style::Off.dim("(no cu)"), "(no cu)");
+    }
+
+    #[test]
+    fn on_wraps_with_sgr() {
+        assert_eq!(Style::On.green("✓"), "\x1b[32m✓\x1b[0m");
+        assert_eq!(Style::On.red("Error"), "\x1b[31mError\x1b[0m");
+        assert_eq!(Style::On.dim("(no cu)"), "\x1b[2m(no cu)\x1b[0m");
+    }
+}

@@ -4,19 +4,10 @@
 //! and handling their results in tests.
 
 mod aliases;
-mod authority;
 mod error_names;
 mod events;
-mod graph;
 mod instruction_names;
-mod mermaid;
-mod model;
-mod ownership;
-mod renderer;
-mod signers;
-mod style;
 mod trace;
-mod tree;
 
 pub use aliases::Aliases;
 // account_index + authority_story now live on the spine (testsvm::cpi);
@@ -518,15 +509,6 @@ impl TransactionResult {
         )
     }
 
-    /// The litesvm-flavored CPI model the per-test renderers (account index,
-    /// authority story) still consume, built from the neutral
-    /// [`as_model`](Self::as_model) record rather than litesvm's raw pieces, so
-    /// resolution happens in exactly one place. The authority story holds the
-    /// analogous per-submit value across a test.
-    pub(in crate::transaction) fn model(&self) -> model::CpiModel {
-        model::from_transaction(&self.as_model())
-    }
-
     /// Print the transaction's CPI invocation tree as a Mermaid
     /// `sequenceDiagram` block.
     ///
@@ -872,7 +854,7 @@ impl TransactionResult {
         // Pinocchio `ProgramError::Custom(7)` once its code is registered, even
         // though only `0x7` appears in the raw logs and error field).
         let found_in_resolved = this
-            .model()
+            .as_model()
             .failure_messages()
             .iter()
             .any(|m| m.contains(expected_error));

@@ -46,48 +46,6 @@ fn test_transaction_result_find_log() {
 }
 
 #[test]
-fn test_transaction_result_compute_units() {
-    let mut svm = LiteSVM::new();
-    let payer = svm.create_funded_account(10_000_000_000).unwrap();
-    let recipient = Keypair::new();
-
-    let ix = system_instruction::transfer(&payer.pubkey(), &recipient.pubkey(), 1_000_000);
-    let result = svm.send_instruction(ix, &[&payer]).unwrap();
-
-    // Simple transfer should consume some compute units
-    let cu = result.compute_units();
-    assert!(cu > 0);
-    assert!(cu < 1_000_000); // Should be reasonable
-}
-
-#[test]
-fn test_transaction_result_logs() {
-    let mut svm = LiteSVM::new();
-    let payer = svm.create_funded_account(10_000_000_000).unwrap();
-    let recipient = Keypair::new();
-
-    let ix = system_instruction::transfer(&payer.pubkey(), &recipient.pubkey(), 1_000_000);
-    let result = svm.send_instruction(ix, &[&payer]).unwrap();
-
-    let logs = result.logs();
-    assert!(!logs.is_empty());
-}
-
-#[test]
-fn test_transaction_result_inner() {
-    let mut svm = LiteSVM::new();
-    let payer = svm.create_funded_account(10_000_000_000).unwrap();
-    let recipient = Keypair::new();
-
-    let ix = system_instruction::transfer(&payer.pubkey(), &recipient.pubkey(), 1_000_000);
-    let result = svm.send_instruction(ix, &[&payer]).unwrap();
-
-    // Should be able to access inner metadata
-    let _inner = result.inner();
-    assert!(_inner.compute_units_consumed > 0);
-}
-
-#[test]
 fn test_transaction_result_failure() {
     let mut svm = LiteSVM::new();
     let payer = Keypair::new(); // Unfunded account
@@ -201,20 +159,6 @@ fn test_send_instructions_no_signers() {
     // Should error when no signers provided
     let result = svm.send_instructions(&[ix], &[]);
     assert!(result.is_err());
-}
-
-#[test]
-fn test_transaction_result_debug() {
-    let mut svm = LiteSVM::new();
-    let payer = svm.create_funded_account(10_000_000_000).unwrap();
-    let recipient = Keypair::new();
-
-    let ix = system_instruction::transfer(&payer.pubkey(), &recipient.pubkey(), 1_000_000);
-    let result = svm.send_instruction(ix, &[&payer]).unwrap();
-
-    // Should be able to format as debug
-    let debug_str = format!("{:?}", result);
-    assert!(debug_str.contains("TransactionResult"));
 }
 
 #[test]

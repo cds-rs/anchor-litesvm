@@ -429,3 +429,471 @@ fn system_instruction_name(data: &[u8]) -> Option<&'static str> {
         _ => return None,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use {
+        super::*,
+        crate::frame::{Frame, Outcome as FrameOutcome},
+        crate::model::{AnchorFailures, Transaction},
+        crate::trace::{InstructionTrace, TracedAccount, TracedInstruction},
+        solana_message::{compiled_instruction::CompiledInstruction, Message, MessageHeader},
+        solana_pubkey::Pubkey,
+    };
+
+    /// Assemble a one-frame-or-tree neutral [`Transaction`] from frames + trace.
+    /// The thin wrapper every `from_transaction` unit test shares.
+    fn assemble(message: Message, frames: Vec<Frame>, trace: Option<InstructionTrace>) -> Transaction {
+        Transaction::assemble(
+            frames,
+            message,
+            vec![],
+            None,
+            0,
+            None,
+            trace,
+            None,
+            &Default::default(),
+            &Default::default(),
+            &AnchorFailures,
+            crate::aliases::Aliases::default(),
+            Default::default(),
+        )
+    }
+
+    #[test]
+    fn resolve_accounts_marks_signer_and_writable_roles() {
+        // 4 keys: [writable-signer, readonly-signer, writable-nonsigner,
+        // readonly-nonsigner]. Header: 2 signers, 1 readonly-signed,
+        // 1 readonly-unsigned.
+        let keys: Vec<Pubkey> = (0..4).map(|_| Pubkey::new_unique()).collect();
+        let message = Message {
+            header: MessageHeader {
+                num_required_signatures: 2,
+                num_readonly_signed_accounts: 1,
+                num_readonly_unsigned_accounts: 1,
+            },
+            account_keys: keys.clone(),
+            ..Default::default()
+        };
+
+        let got = resolve_accounts(&[0, 1, 2, 3], &message);
+        let roles: Vec<(bool, bool)> = got.iter().map(|a| (a.is_signer, a.is_writable)).collect();
+        assert_eq!(
+            roles,
+            vec![(true, true), (true, false), (false, true), (false, false)],
+            "signer/writable roles per legacy-message header rule"
+        );
+        // Pubkeys round-trip in order.
+        assert_eq!(
+            got.iter().map(|a| a.pubkey).collect::<Vec<_>>(),
+            keys,
+            "resolved pubkeys should match account_keys in index order"
+        );
+
+        // Out-of-range indices are skipped, not panicked on.
+        assert_eq!(resolve_accounts(&[99], &message).len(), 0);
+    }
+
+    #[test]
+    fn spl_token_instruction_name_decodes_known_discriminators() {
+        assert_eq!(spl_token_instruction_name(&[7, 1, 2, 3]), Some("MintTo"));
+        assert_eq!(
+            spl_token_instruction_name(&[12, 0, 0]),
+            Some("TransferChecked")
+        );
+        assert_eq!(spl_token_instruction_name(&[8]), Some("Burn"));
+        assert_eq!(spl_token_instruction_name(&[]), None);
+        assert_eq!(spl_token_instruction_name(&[99]), None);
+    }
+
+    #[test]
+    fn system_instruction_name_decodes_u32_le_tag() {
+        assert_eq!(
+            system_instruction_name(&[0, 0, 0, 0, /*rest*/ 1, 2, 3]),
+            Some("CreateAccount")
+        );
+        assert_eq!(system_instruction_name(&[8, 0, 0, 0]), Some("Allocate"));
+        assert_eq!(system_instruction_name(&[1, 2, 3]), None);
+    }
+
+    #[test]
+    fn spl_ata_instruction_name_handles_empty_data() {
+        assert_eq!(spl_ata_instruction_name(&[]), Some("Create"));
+        assert_eq!(spl_ata_instruction_name(&[0]), Some("Create"));
+        assert_eq!(spl_ata_instruction_name(&[1]), Some("CreateIdempotent"));
+    }
+
+    #[test]
+    fn from_transaction_sources_inner_accounts_and_names_from_the_trace() {
+        let program = Pubkey::new_unique();
+        let system = Pubkey::default();
+        let payer = Pubkey::new_unique();
+        let new_acct = Pubkey::new_unique();
+
+        // One top-level instruction to `program`, accounts [payer (signer), new_acct].
+        let message = Message {
+            header: MessageHeader {
+                num_required_signatures: 1,
+                num_readonly_signed_accounts: 0,
+                num_readonly_unsigned_accounts: 1,
+            },
+            account_keys: vec![payer, new_acct, program],
+            instructions: vec![CompiledInstruction {
+                program_id_index: 2,
+                accounts: vec![0, 1],
+                data: vec![9, 9, 9, 9],
+            }],
+            ..Default::default()
+        };
+
+        // Engine-neutral frames: a named root with one unnamed System child.
+        // Neither carries accounts; the trace is their only source.
+        let frames = vec![Frame {
+            program_id: program,
+            outcome: FrameOutcome::Success,
+            compute_units: None,
+            instruction_name: Some("Withdraw".into()),
+            logs: vec![],
+            children: vec![Frame {
+                program_id: system,
+                outcome: FrameOutcome::Success,
+                compute_units: None,
+                instruction_name: None,
+                logs: vec![],
+                children: vec![],
+            }],
+        }];
+
+        // Flat DFS trace carrying per-frame accounts (with owners) and the inner
+        // System `CreateAccount` data (4-byte u32 LE tag 0). new_acct ends up
+        // owned by `program` (the inner frame's owner differs from the root's).
+        let trace = InstructionTrace(vec![
+            TracedInstruction {
+                program_id: program,
+                stack_height: 1,
+                data: vec![9, 9, 9, 9],
+                accounts: vec![
+                    TracedAccount {
+                        pubkey: payer,
+                        is_signer: true,
+                        is_writable: true,
+                        owner: system,
+                    },
+                    TracedAccount {
+                        pubkey: new_acct,
+                        is_signer: false,
+                        is_writable: true,
+                        owner: system,
+                    },
+                ],
+            },
+            TracedInstruction {
+                program_id: system,
+                stack_height: 2,
+                data: vec![0, 0, 0, 0],
+                accounts: vec![
+                    TracedAccount {
+                        pubkey: payer,
+                        is_signer: true,
+                        is_writable: true,
+                        owner: system,
+                    },
+                    TracedAccount {
+                        pubkey: new_acct,
+                        is_signer: false,
+                        is_writable: true,
+                        owner: program,
+                    },
+                ],
+            },
+        ]);
+
+        let tx = assemble(message, frames, Some(trace));
+        let model = from_transaction(&tx);
+
+        let root = &model.roots[0].frame;
+        assert_eq!(root.program, program);
+        assert_eq!(root.instruction_name.as_deref(), Some("Withdraw"));
+        assert_eq!(
+            root.accounts.iter().map(|a| a.pubkey).collect::<Vec<_>>(),
+            vec![payer, new_acct],
+            "root accounts come from the trace",
+        );
+        assert!(root.accounts[0].is_signer && root.accounts[0].is_writable);
+
+        // The whole point: the inner frame's accounts come from the trace, with
+        // the trace's owners, and the name decodes from the traced data.
+        let child = &root.children[0];
+        assert_eq!(child.program, system);
+        assert_eq!(
+            child.instruction_name.as_deref(),
+            Some("CreateAccount"),
+            "the inner frame's name decodes from the trace's data",
+        );
+        assert_eq!(
+            child.accounts.iter().map(|a| a.pubkey).collect::<Vec<_>>(),
+            vec![payer, new_acct],
+            "inner-frame accounts come from the trace",
+        );
+        assert_eq!(
+            child.accounts[1].owner,
+            Some(program),
+            "the inner frame's owner comes from the trace",
+        );
+    }
+
+    #[test]
+    fn from_transaction_decodes_inner_name_without_shadowing_resolved_name() {
+        // The trace pass fills an OPEN inner name but must never overwrite a
+        // name the frame already carries (a log-derived or upstream one). The
+        // root carries `Withdraw`; the System child is unnamed and decodes from
+        // the trace's `CreateAccount` data.
+        let program = Pubkey::new_unique();
+        let system = Pubkey::default();
+
+        let frames = vec![Frame {
+            program_id: program,
+            outcome: FrameOutcome::Success,
+            compute_units: None,
+            instruction_name: Some("Withdraw".into()),
+            logs: vec![],
+            children: vec![Frame {
+                program_id: system,
+                outcome: FrameOutcome::Success,
+                compute_units: None,
+                instruction_name: None,
+                logs: vec![],
+                children: vec![],
+            }],
+        }];
+        let trace = InstructionTrace(vec![
+            TracedInstruction {
+                program_id: program,
+                stack_height: 1,
+                accounts: vec![],
+                data: vec![9, 9, 9, 9],
+            },
+            TracedInstruction {
+                program_id: system,
+                stack_height: 2,
+                accounts: vec![],
+                data: vec![0, 0, 0, 0],
+            },
+        ]);
+
+        let tx = assemble(Message::default(), frames, Some(trace));
+        let model = from_transaction(&tx);
+        let root = &model.roots[0].frame;
+        assert_eq!(
+            root.instruction_name.as_deref(),
+            Some("Withdraw"),
+            "an already-resolved frame name must not be shadowed by the trace pass"
+        );
+        assert_eq!(
+            root.children[0].instruction_name.as_deref(),
+            Some("CreateAccount"),
+            "the inner native-program frame resolves its name from the traced data"
+        );
+    }
+
+    #[test]
+    fn from_transaction_builds_one_root_per_top_level_instruction() {
+        // Batch send: two top-level frames -> two roots, and no single header
+        // (a batch carries no one canonical instruction).
+        let prog_a = Pubkey::new_unique();
+        let prog_b = Pubkey::new_unique();
+        let message = Message {
+            account_keys: vec![prog_a, prog_b],
+            instructions: vec![
+                CompiledInstruction {
+                    program_id_index: 0,
+                    accounts: vec![],
+                    data: vec![],
+                },
+                CompiledInstruction {
+                    program_id_index: 1,
+                    accounts: vec![],
+                    data: vec![],
+                },
+            ],
+            ..Default::default()
+        };
+        let frames = vec![
+            Frame {
+                program_id: prog_a,
+                outcome: FrameOutcome::Success,
+                compute_units: None,
+                instruction_name: Some("First".into()),
+                logs: vec![],
+                children: vec![],
+            },
+            Frame {
+                program_id: prog_b,
+                outcome: FrameOutcome::Success,
+                compute_units: None,
+                instruction_name: Some("Second".into()),
+                logs: vec![],
+                children: vec![],
+            },
+        ];
+
+        let tx = assemble(message, frames, None);
+        let model = from_transaction(&tx);
+        assert_eq!(model.roots.len(), 2, "one root per top-level instruction");
+        assert_eq!(model.roots[0].frame.program, prog_a);
+        assert_eq!(model.roots[1].frame.program, prog_b);
+        assert!(
+            model.header.is_none(),
+            "a batch send carries no single header"
+        );
+    }
+
+    #[test]
+    fn from_transaction_degrades_inner_frames_to_account_less_without_a_trace() {
+        // No trace: a root falls back to its message account list, but an inner
+        // CPI frame can't be reconstructed and renders account-less (the
+        // documented graceful degradation for trace-less engines).
+        let program = Pubkey::new_unique();
+        let system = Pubkey::default();
+        let payer = Pubkey::new_unique();
+        let message = Message {
+            header: MessageHeader {
+                num_required_signatures: 1,
+                num_readonly_signed_accounts: 0,
+                num_readonly_unsigned_accounts: 1,
+            },
+            account_keys: vec![payer, program],
+            instructions: vec![CompiledInstruction {
+                program_id_index: 1,
+                accounts: vec![0],
+                data: vec![],
+            }],
+            ..Default::default()
+        };
+        let frames = vec![Frame {
+            program_id: program,
+            outcome: FrameOutcome::Success,
+            compute_units: None,
+            instruction_name: Some("Withdraw".into()),
+            logs: vec![],
+            children: vec![Frame {
+                program_id: system,
+                outcome: FrameOutcome::Success,
+                compute_units: None,
+                instruction_name: None,
+                logs: vec![],
+                children: vec![],
+            }],
+        }];
+
+        let tx = assemble(message, frames, None);
+        let model = from_transaction(&tx);
+        let root = &model.roots[0].frame;
+        // The root recovers its accounts from the message.
+        assert_eq!(
+            root.accounts.iter().map(|a| a.pubkey).collect::<Vec<_>>(),
+            vec![payer],
+            "the root frame falls back to its message account list",
+        );
+        // The inner frame has nothing to reconstruct from: account-less.
+        assert!(
+            root.children[0].accounts.is_empty(),
+            "an inner frame renders account-less without a trace",
+        );
+    }
+
+    #[test]
+    fn from_transaction_carries_a_failed_frame_message() {
+        // A failed frame's resolved message rides onto the CpiModel so the
+        // renderers can surface it. The Anchor `Error Code:` resolution runs in
+        // `assemble`; here we pin that the failed outcome and its message
+        // survive the conversion.
+        let program = Pubkey::new_unique();
+        let message = Message {
+            account_keys: vec![program],
+            instructions: vec![CompiledInstruction {
+                program_id_index: 0,
+                accounts: vec![],
+                data: vec![],
+            }],
+            ..Default::default()
+        };
+        let frames = vec![Frame {
+            program_id: program,
+            outcome: FrameOutcome::Failed {
+                message: Some("custom program error: 0x1770".into()),
+            },
+            compute_units: None,
+            instruction_name: Some("Take".into()),
+            logs: vec![crate::frame::FrameLog::Msg(
+                "AnchorError thrown in take.rs:1. Error Code: EscrowExpired. Error Number: 6000."
+                    .into(),
+            )],
+            children: vec![],
+        }];
+
+        let tx = assemble(message, frames, None);
+        let model = from_transaction(&tx);
+        match &model.roots[0].frame.outcome {
+            Outcome::Failed { message } => assert_eq!(
+                message.as_deref(),
+                Some("EscrowExpired"),
+                "the Anchor error name resolves onto the failed frame",
+            ),
+            other => panic!("expected a failed frame, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn from_transaction_carries_inner_frame_events() {
+        // A `Program data:` payload on an inner frame survives onto the model's
+        // inner ResolvedFrame, so an event a CPI emitted is renderable.
+        let program = Pubkey::new_unique();
+        let system = Pubkey::default();
+        let message = Message {
+            account_keys: vec![program],
+            instructions: vec![CompiledInstruction {
+                program_id_index: 0,
+                accounts: vec![],
+                data: vec![],
+            }],
+            ..Default::default()
+        };
+        let frames = vec![Frame {
+            program_id: program,
+            outcome: FrameOutcome::Success,
+            compute_units: None,
+            instruction_name: Some("Make".into()),
+            logs: vec![],
+            children: vec![Frame {
+                program_id: system,
+                outcome: FrameOutcome::Success,
+                compute_units: None,
+                instruction_name: None,
+                logs: vec![crate::frame::FrameLog::Data("AAAAAAAAAAA=".into())],
+                children: vec![],
+            }],
+        }];
+
+        let tx = assemble(message, frames, None);
+        let model = from_transaction(&tx);
+        let child = &model.roots[0].frame.children[0];
+        assert_eq!(
+            child.logs,
+            vec![FrameLog::Data("AAAAAAAAAAA=".to_string())],
+            "the inner frame's event payload rides onto the model",
+        );
+    }
+}
+
+#[cfg(test)]
+impl std::fmt::Debug for Outcome {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Outcome::Success => write!(f, "Success"),
+            Outcome::Truncated => write!(f, "Truncated"),
+            Outcome::Failed { message } => write!(f, "Failed {{ message: {message:?} }}"),
+        }
+    }
+}

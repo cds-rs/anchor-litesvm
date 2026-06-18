@@ -22,6 +22,8 @@ mod render_api;
 mod renderer;
 mod signers;
 mod style;
+#[cfg(test)]
+mod test_support;
 mod tree;
 
 // The per-test renderers (a census of accounts, a cross-submit authority

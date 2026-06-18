@@ -174,3 +174,27 @@ fn sanitize_id(name: &str) -> String {
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn node_ids_disambiguate_on_collision_and_are_idempotent() {
+        let mut ids = NodeIds::new();
+        assert_eq!(ids.id("a.b"), "a_b");
+        // `a-b` also sanitizes to `a_b`; must not collide with the first.
+        assert_eq!(ids.id("a-b"), "a_b_2");
+        // same names keep their assigned ids.
+        assert_eq!(ids.id("a.b"), "a_b");
+        assert_eq!(ids.id("a-b"), "a_b_2");
+    }
+
+    #[test]
+    fn node_label_quotes_only_unsafe_names() {
+        assert_eq!(node_label("alice"), "alice");
+        assert_eq!(node_label("Token_2022"), "Token_2022");
+        assert_eq!(node_label("AbCd1234…WXYZ"), "\"AbCd1234…WXYZ\"");
+        assert_eq!(node_label("a.b"), "\"a.b\"");
+    }
+}
