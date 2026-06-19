@@ -1,0 +1,659 @@
+<!DOCTYPE HTML>
+<html lang="en" class="rust sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>CPAMM: A Constant-Product AMM - Testing Anchor Programs with LiteSVM</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="A reference guide to anchor-litesvm: named accounts, rich CPI rendering, and tests where every account is a first-class actor.">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="../favicon-8114d1fc.png">
+        <link rel="stylesheet" href="../css/variables-8adf115d.css">
+        <link rel="stylesheet" href="../css/general-0392ca55.css">
+        <link rel="stylesheet" href="../css/chrome-fc474251.css">
+        <link rel="stylesheet" href="../css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="../highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="../tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="../ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../css/custom-dda1d6aa.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "rust";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "../searchindex-db0fbc67.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc-c4069722.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('rust')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Testing Anchor Programs with LiteSVM</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+                        <a href="https://github.com/cds-rs/anchor-litesvm" title="Git repository" aria-label="Git repository">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 496 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M165.9 397.4c0 2-2.3 3.6-5.2 3.6-3.3.3-5.6-1.3-5.6-3.6 0-2 2.3-3.6 5.2-3.6 3-.3 5.6 1.3 5.6 3.6zm-31.1-4.5c-.7 2 1.3 4.3 4.3 4.9 2.6 1 5.6 0 6.2-2s-1.3-4.3-4.3-5.2c-2.6-.7-5.5.3-6.2 2.3zm44.2-1.7c-2.9.7-4.9 2.6-4.6 4.9.3 2 2.9 3.3 5.9 2.6 2.9-.7 4.9-2.6 4.6-4.6-.3-1.9-3-3.2-5.9-2.9zM244.8 8C106.1 8 0 113.3 0 252c0 110.9 69.8 205.8 169.5 239.2 12.8 2.3 17.3-5.6 17.3-12.1 0-6.2-.3-40.4-.3-61.4 0 0-70 15-84.7-29.8 0 0-11.4-29.1-27.8-36.6 0 0-22.9-15.7 1.6-15.4 0 0 24.9 2 38.6 25.8 21.9 38.6 58.6 27.5 72.9 20.9 2.3-16 8.8-27.1 16-33.7-55.9-6.2-112.3-14.3-112.3-110.5 0-27.5 7.6-41.3 23.6-58.9-2.6-6.5-11.1-33.3 2.6-67.9 20.9-6.5 69 27 69 27 20-5.6 41.5-8.5 62.8-8.5s42.8 2.9 62.8 8.5c0 0 48.1-33.6 69-27 13.7 34.7 5.2 61.4 2.6 67.9 16 17.7 25.8 31.5 25.8 58.9 0 96.5-58.9 104.2-114.8 110.5 9.2 7.9 17 22.9 17 46.4 0 33.7-.3 75.4-.3 83.6 0 6.5 4.6 14.4 17.3 12.1C428.2 457.8 496 362.9 496 252 496 113.3 383.5 8 244.8 8zM97.2 352.9c-1.3 1-1 3.3.7 5.2 1.6 1.6 3.9 2.3 5.2 1 1.3-1 1-3.3-.7-5.2-1.6-1.6-3.9-2.3-5.2-1zm-10.8-8.1c-.7 1.3.3 2.9 2.3 3.9 1.6 1 3.6.7 4.3-.7.7-1.3-.3-2.9-2.3-3.9-2-.6-3.6-.3-4.3.7zm32.4 35.6c-1.6 1.3-1 4.3 1.3 6.2 2.3 2.3 5.2 2.6 6.5 1 1.3-1.3.7-4.3-1.3-6.2-2.2-2.3-5.2-2.6-6.5-1zm-11.4-14.7c-1.6 1-1.6 3.6 0 5.9 1.6 2.3 4.3 3.3 5.6 2.3 1.6-1.3 1.6-3.9 0-6.2-1.4-2.3-4-3.3-5.6-2z"/></svg></span>
+                        </a>
+                        <a href="https://github.com/cds-rs/anchor-litesvm/edit/turbin3/book/src/examples/cpamm.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
+                            <span class=fa-svg id="git-edit-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M421.7 220.3l-11.3 11.3-22.6 22.6-205 205c-6.6 6.6-14.8 11.5-23.8 14.1L30.8 511c-8.4 2.5-17.5 .2-23.7-6.1S-1.5 489.7 1 481.2L38.7 353.1c2.6-9 7.5-17.2 14.1-23.8l205-205 22.6-22.6 11.3-11.3 33.9 33.9 62.1 62.1 33.9 33.9zM96 353.9l-9.3 9.3c-.9 .9-1.6 2.1-2 3.4l-25.3 86 86-25.3c1.3-.4 2.5-1.1 3.4-2l9.3-9.3H112c-8.8 0-16-7.2-16-16V353.9zM453.3 19.3l39.4 39.4c25 25 25 65.5 0 90.5l-14.5 14.5-22.6 22.6-11.3 11.3-33.9-33.9-62.1-62.1L314.3 67.7l11.3-11.3 22.6-22.6 14.5-14.5c25-25 65.5-25 90.5 0z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="cpamm-a-constant-product-amm"><a class="header" href="#cpamm-a-constant-product-amm">CPAMM: A Constant-Product AMM</a></h1>
+<p>This is the finale, and it pulls together every thread in the book: the <a href="../instructions/bundled-pubkeys.html">bundle derive</a> at full stretch, the <a href="../running/accounts-as-actors.html">actors model</a> scaling to a cast that no longer fits on a sticky note, an <em>invariant</em> to assert (not just a balance), and <a href="../inspect/cpi-tree.html">rendered output</a> with real CPI depth.</p>
+<p>We’ll build against a standard constant-product AMM (a Uniswap-v2-style <code>x·y=k</code> pool): two token mints, a pool that custodies reserves in two vaults, an LP mint that represents a share of the pool, and the operations that move value around it (initialize, add and remove liquidity, swap, plus a few admin paths).</p>
+<p>Two things make this chapter different from Vault and Escrow. First, the field names below are <em>real</em>: they’re the account sets from a working AMM (the capstone AMM dogfood port at <code>programs/amm</code>), so the names you read here (<code>mint_x</code>, <code>vault_y</code>, <code>user_x</code>, and friends) are the names that program’s <code>#[derive(Accounts)]</code> structs actually carry. Second, the AMM is where the bundle derive’s second projection mode, <a href="../instructions/bundled-pubkeys.html"><code>BundleFrom</code></a>, does real work: a swap’s bundle is assembled from <em>two</em> fixtures (a pool and a user) in one call.</p>
+<h2 id="how-we-model-it"><a class="header" href="#how-we-model-it">How we model it</a></h2>
+<p>A constant-product pool custodies reserves of two tokens (<code>mint_x</code>, <code>mint_y</code>) in two vaults, and mints an LP token (<code>mint_lp</code>) that represents a share of those reserves. Liquidity providers deposit both tokens and receive LP shares; traders swap one token for the other, paying a fee; the product of the two reserves, <code>k = reserve_x · reserve_y</code>, may only grow. A <code>config</code> PDA holds the pool state and is the mint authority for the LP token.</p>
+<h2 id="the-cast-of-characters"><a class="header" href="#the-cast-of-characters">The cast of characters</a></h2>
+<p>Vault had three actors and Escrow six; a pool has more, and this is where the actors model shows it doesn’t fall apart as the cast grows, because every account is named.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Actor</th><th>Kind</th><th>Role</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>authority</strong></td><td>user (signer)</td><td>creates the pool; can lock it and change the fee</td></tr>
+<tr><td><strong>LP</strong> (alice)</td><td>user (signer)</td><td>adds and removes liquidity</td></tr>
+<tr><td><strong>trader</strong> (bob)</td><td>user (signer)</td><td>swaps one token for the other</td></tr>
+<tr><td><strong>mint_x / mint_y</strong></td><td>mints</td><td>the trading pair (<code>mint_x &lt; mint_y</code> by pubkey)</td></tr>
+<tr><td><strong>mint_lp</strong></td><td>mint</td><td>the LP share token (its mint authority is <code>config</code>)</td></tr>
+<tr><td><strong>config</strong></td><td>PDA (program account)</td><td>the pool’s state</td></tr>
+<tr><td><strong>vault_x / vault_y</strong></td><td>PDAs (token accounts)</td><td>the reserves</td></tr>
+</tbody>
+</table>
+</div>
+<p><img src="diagrams/cpamm-relationship.svg" alt="Pool account relationships"></p>
+<h2 id="ownership"><a class="header" href="#ownership">Ownership</a></h2>
+<p>The reserves and the LP mint are owned by the <strong>Token program</strong>; the AMM program owns only the <code>config</code> state account and signs as the <code>config</code> PDA to move the vaults and mint LP shares.</p>
+<p><img src="diagrams/cpamm-ownership.svg" alt="Pool ownership"></p>
+<h2 id="authority"><a class="header" href="#authority">Authority</a></h2>
+<p>Each instruction has its signer: the authority for <code>initialize</code> and the admin paths, an LP for liquidity, a trader for <code>swap</code>. The admin paths (<code>set_locked</code>, <code>update_fee</code>) additionally check the signer against <code>config.authority</code>.</p>
+<p><img src="diagrams/cpamm-authority.svg" alt="Pool authority"></p>
+<h2 id="the-use-cases"><a class="header" href="#the-use-cases">The use cases</a></h2>
+<p><img src="diagrams/cpamm-usecases.svg" alt="Pool use cases"></p>
+<h2 id="the-bundle-defined-once-in-the-program"><a class="header" href="#the-bundle-defined-once-in-the-program">The bundle, defined once in the program</a></h2>
+<p>Two derives do the work, and they sit in different places.</p>
+<p>The first is on a host-only <strong>bundle struct</strong> in the program’s <code>src/</code>. It lists the pubkeys a family of instructions varies over, and it carries <em>two</em> derives: <code>Bundle</code> (which gives it a <code>Default</code> that fills every field with a throwaway <code>Pubkey::new_unique()</code>) and <code>BundleFrom</code> (which projects the bundle out of source fixtures). The <code>#[from_fixtures(...)]</code> attribute names those fixtures and binds them to short names; here <code>p</code> for the pool and <code>u</code> for the user:</p>
+<pre><code class="language-rust">// src/instructions/swap.rs
+#[cfg(not(target_os = "solana"))]
+#[derive(anchor_litesvm::Bundle, anchor_litesvm::BundleFrom, Copy, Clone)]
+#[from_fixtures(p: crate::test_helpers::Pool, u: crate::test_helpers::UserAccounts)]
+pub struct SwapBundle {
+    #[from(u.pubkey())]
+    pub user: Pubkey,
+    pub mint_x: Pubkey,
+    pub mint_y: Pubkey,
+    pub config: Pubkey,
+    pub vault_x: Pubkey,
+    pub vault_y: Pubkey,
+    #[from(u.ata_x)]
+    pub user_x: Pubkey,
+    #[from(u.ata_y)]
+    pub user_y: Pubkey,
+}</code></pre>
+<p>A bare field (no <code>#[from(...)]</code>) projects from the first declared fixture by name, so <code>mint_x</code> becomes <code>p.mint_x</code>. The <code>#[from(...)]</code> overrides handle the user-side fields and renames (<code>user_x</code> from <code>u.ata_x</code>).</p>
+<p>The projection rule is worth stating precisely, because it’s the one thing that bites: a bare field (no <code>#[from(...)]</code>) projects from the <strong>first</strong> declared fixture, by field name. So <code>mint_x: Pubkey</code> with no annotation becomes <code>p.mint_x</code>. Put your primary fixture first (the pool, here, since it owns most of the accounts) and reach for <code>#[from(...)]</code> only when the source is the other fixture or the names disagree. The macro can’t read the fixture structs at expansion time (proc-macros only see their own input), so if a bare field doesn’t actually exist on the first fixture, you get a rustc field-not-found error pointed at the field by name; that’s your signal to add an override.</p>
+<p>The second derive is the <a href="../instructions/bundled-pubkeys.html"><code>BundledPubkeys</code></a> one you’ve seen since the <a href="../intro/first-test.html">first test</a>, on the instruction’s <code>#[derive(Accounts)]</code> struct. It’s what pairs <code>SwapBundle</code> with the account list <em>and</em> the args, so <code>build</code> knows which bundle goes with which instruction:</p>
+<pre><code class="language-rust">// src/instructions/swap.rs
+#[derive(Accounts)]
+#[cfg_attr(
+    not(target_os = "solana"),
+    derive(anchor_litesvm::BundledPubkeys),
+    bundled_with(SwapBundle)
+)]
+pub struct Swap&lt;'info&gt; {
+    #[account(mut)]
+    pub user: Signer&lt;'info&gt;,
+    pub mint_x: Box&lt;InterfaceAccount&lt;'info, Mint&gt;&gt;,
+    pub mint_y: Box&lt;InterfaceAccount&lt;'info, Mint&gt;&gt;,
+
+    #[account(
+        has_one = mint_x,
+        has_one = mint_y,
+        seeds = [CONFIG_SEED, config.seed.to_le_bytes().as_ref()],
+        bump = config.config_bump,
+    )]
+    pub config: Box&lt;Account&lt;'info, Config&gt;&gt;,
+
+    #[account(mut, associated_token::mint = mint_x, associated_token::authority = config)]
+    pub vault_x: Box&lt;InterfaceAccount&lt;'info, TokenAccount&gt;&gt;,
+
+    #[account(mut, associated_token::mint = mint_y, associated_token::authority = config)]
+    pub vault_y: Box&lt;InterfaceAccount&lt;'info, TokenAccount&gt;&gt;,
+
+    #[account(mut, associated_token::mint = mint_x, associated_token::authority = user)]
+    pub user_x: Box&lt;InterfaceAccount&lt;'info, TokenAccount&gt;&gt;,
+
+    #[account(mut, associated_token::mint = mint_y, associated_token::authority = user)]
+    pub user_y: Box&lt;InterfaceAccount&lt;'info, TokenAccount&gt;&gt;,
+
+    pub token_program: Interface&lt;'info, TokenInterface&gt;,
+}</code></pre>
+<p>Notice what’s absent from <code>SwapBundle</code>: <code>token_program</code>. The accounts struct declares it as <code>Interface&lt;TokenInterface&gt;</code>, and <code>BundledPubkeys</code> recognizes that type and <a href="../instructions/bundled-pubkeys.html">auto-injects</a> the canonical SPL Token id. So the bundle carries only what a test varies. The host-only machinery is gated <code>#[cfg(not(target_os = "solana"))]</code>, the same as every other listing, so none of it ships in the BPF build.</p>
+<h2 id="the-fixtures-the-bundle-projects-from"><a class="header" href="#the-fixtures-the-bundle-projects-from">The fixtures the bundle projects from</a></h2>
+<p><code>BundleFrom</code> is only useful if there’s something to project <em>from</em>. The AMM defines two fixtures (both in <code>programs/amm/src/test_helpers.rs</code>), and they map onto the two halves of the cast: shared pool state, and per-actor accounts.</p>
+<pre><code class="language-rust">// src/test_helpers.rs
+#[derive(Copy, Clone, Debug, AliasMirror)]
+pub struct Pool {
+    pub seed: u64,
+    #[alias(skip)]
+    pub mint_x: Pubkey,
+    #[alias(skip)]
+    pub mint_y: Pubkey,
+    #[alias("MintLP")]
+    pub mint_lp: Pubkey,
+    #[alias("Pool")]
+    pub config: Pubkey,
+    #[alias("VaultX")]
+    pub vault_x: Pubkey,
+    #[alias("VaultY")]
+    pub vault_y: Pubkey,
+    #[alias("LpVault")]
+    pub lp_vault: Pubkey,
+}</code></pre>
+<pre><code class="language-rust">// src/test_helpers.rs
+pub struct UserAccounts {
+    pub signer: Keypair,
+    pub label: String,
+    pub ata_x: Pubkey,
+    pub ata_y: Pubkey,
+}
+
+impl UserAccounts {
+    pub fn pubkey(&amp;self) -&gt; Pubkey {
+        self.signer.pubkey()
+    }
+
+    pub fn ata_lp(&amp;self, mint_lp: &amp;Pubkey) -&gt; Pubkey {
+        get_associated_token_address(&amp;self.signer.pubkey(), mint_lp)
+    }</code></pre>
+<p>Two things to notice. First, <code>Pool</code> carries <code>#[derive(AliasMirror)]</code>, the fourth member of the <a href="../instructions/bundled-pubkeys.html">bundle family</a>: it generates an <code>alias_all(&amp;self, ctx)</code> that registers every labelled field in the alias table in one call, so the pool’s accounts name themselves in your rendered output. (<code>mint_x</code> / <code>mint_y</code> are <code>#[alias(skip)]</code> because the harness aliases the global mints once at setup; re-aliasing them per pool would be redundant.) Second, <code>UserAccounts</code> is <em>the</em> actor type for the whole suite: one struct covers LPs, traders, admins, and attackers, with the narrative role carried by the variable name and the <code>label</code>, not by the type.</p>
+<p>With those in hand, building a bundle is one call: <code>SwapBundle::from((&amp;pool, &amp;user))</code>. A swap touches ten accounts, but the test never spells ten pubkeys; it hands over a pool and a user, and the derive does the projection.</p>
+<p>A second bundle shows the override expression doing real work. <code>AddLiquidityBundle</code> needs the user’s LP ATA, which isn’t a plain field on either fixture: it’s <em>computed</em> from a field of each (the user’s key and the pool’s LP mint). The override expression can reference both bound names:</p>
+<pre><code class="language-rust">// src/instructions/add_liquidity.rs
+#[cfg(not(target_os = "solana"))]
+#[derive(anchor_litesvm::Bundle, anchor_litesvm::BundleFrom, Copy, Clone)]
+#[from_fixtures(p: crate::test_helpers::Pool, u: crate::test_helpers::UserAccounts)]
+pub struct AddLiquidityBundle {
+    #[from(u.pubkey())]
+    pub user: Pubkey,
+    pub mint_x: Pubkey,
+    pub mint_y: Pubkey,
+    pub config: Pubkey,
+    pub mint_lp: Pubkey,
+    pub vault_x: Pubkey,
+    pub vault_y: Pubkey,
+    pub lp_vault: Pubkey,
+    #[from(u.ata_x)]
+    pub user_x: Pubkey,
+    #[from(u.ata_y)]
+    pub user_y: Pubkey,
+    #[from(u.ata_lp(&amp;p.mint_lp))]
+    pub user_lp: Pubkey,
+}</code></pre>
+<p><code>#[from(u.ata_lp(&amp;p.mint_lp))]</code> is the cross-fixture override: a method on the user fixture that takes a field of the pool fixture. The bundle stays one source of truth for the instruction’s accounts, and the derivation logic (how an LP ATA is computed) stays where it belongs, on <code>UserAccounts</code>.</p>
+<p>The AMM’s <code>AddLiquidityBundle</code> and <code>RemoveLiquidityBundle</code> have <em>identical field sets</em>, and stay separate types anyway: <code>build(add_bundle, vix::RemoveLiquidity { .. })</code> doesn’t compile, because there’s no <code>BuildableIx&lt;AddLiquidityBundle&gt;</code> for <code>instruction::RemoveLiquidity</code>. Two structurally identical bundles, and the <a href="../instructions/bundled-pubkeys.html"><code>BuildableIx</code> invariant</a> still catches add-versus-remove confusion at the call site.</p>
+<h2 id="setup-a-scenario-harness-for-a-cast-this-size"><a class="header" href="#setup-a-scenario-harness-for-a-cast-this-size">Setup: a Scenario harness for a cast this size</a></h2>
+<p>With a cast this size, the per-scenario setup wants its own home. The AMM suite uses a <code>setup() -&gt; Scenario</code> harness (it lives in <code>programs/amm/tests/common/mod.rs</code>) that deploys the program, mints two deterministic global mints, and hands back a <code>Scenario</code> that knows how to mint new actors and pools on demand:</p>
+<pre><code class="language-rust">// tests/common/mod.rs
+pub fn setup() -&gt; Scenario {
+    // The world for the AMM tests: a constant-product pool that trades mint X
+    // for mint Y. Setup casts the authority that initializes the pool and both
+    // tokens it trades; the pool's own accounts (config PDA, the two vaults, the
+    // LP mint) derive from the mints, so a fixture builds them per test.
+    // `build_with_program` registers `"amm"` as the program's alias.
+    let mut ctx = AnchorLiteSVM::build_with_program(amm::ID, "amm", AMM_BYTES);
+
+    // The authority that can mint either token, cast as a funded signer. Each
+    // mint is cast against it: `cast_mint` derives the mint at a deterministic
+    // address (which is what keeps the pool PDAs stable), creates it, and
+    // registers the leaf alias ("MintX", "MintY").
+    let mint_authority = ctx.cast_actor_with_sol("authority", DEFAULT_SOL);
+    let mint_x = ctx.cast_mint("MintX", &amp;mint_authority, 6);
+    let mint_y = ctx.cast_mint("MintY", &amp;mint_authority, 6);
+
+    Scenario {
+        ctx,
+        mint_authority,
+        mint_x,
+        mint_y,
+    }
+}</code></pre>
+<p>The test-facing API is a few <code>Scenario</code> verbs, each returning the real fixtures the bundles project from:</p>
+<pre><code class="language-rust">impl Scenario {
+    // A funded actor with `x_balance`/`y_balance` minted into fresh ATAs;
+    // the label is registered in the alias table and carried on the actor.
+    pub fn user(&amp;mut self, label: &amp;str, x_balance: u64, y_balance: u64) -&gt; UserAccounts { /* ... */ }
+
+    // Initialize a brand-new pool with the given fee, returning its admin
+    // and the derived `Pool` fixture.
+    pub fn fresh_pool(&amp;mut self, fee_bps: u16) -&gt; (UserAccounts, Pool) { /* ... */ }
+
+    // Add liquidity from a user (wraps the AddLiquidity ix shown below).
+    pub fn deposit(&amp;mut self, lp: &amp;UserAccounts, pool: &amp;Pool, x: u64, y: u64, min_lp: u64) { /* ... */ }
+}</code></pre>
+<p>Three things in that setup carry the determinism the whole suite rests on:</p>
+<ul>
+<li><code>ctx.cast_actor_with_sol("authority", DEFAULT_SOL)</code> casts the mint authority: a keypair derived from its name (so the same name always yields the same pubkey, and committed output diffs cleanly run to run), funded, and aliased, in one call. The <code>cast_*</code> vocabulary tracks its names and panics on a duplicate, since the name <em>is</em> the seed and a collision would silently alias two casts to one address.</li>
+<li><code>ctx.cast_mint("MintX", &amp;mint_authority, 6)</code> casts each token: it derives the mint at a deterministic address (a stable mint pubkey, and stable vaults and ATAs downstream), creates it under the authority, and registers the leaf alias. The mint names itself as it is cast.</li>
+<li>The cast names flow straight to rendered output: each cast registers its alias in the context’s table as a side effect, and <code>pool.alias_all(&amp;mut ctx)</code> (from <code>AliasMirror</code>) registers a whole pool’s worth of derived accounts at once, so the trace never shows a raw pubkey. To override a name later (a role rotation, say), <code>ctx.alias(pubkey, "NewName")</code> is last-write-wins.</li>
+</ul>
+<p>Each test below threads a <code>Report</code> (<code>md</code>), the same recorder the <a href="escrow.html#make-a-narrated-test">escrow chapter</a> covers in full: <code>md.step</code> titles a phase, <code>md.snapshot</code> and <code>md.block</code> capture a labelled table (the pool’s vaults, the <code>Config</code>), and <code>md.check</code> is an assertion that also records a pass/fail line. The run emits to <code>target/md-reports/&lt;slug&gt;.md</code>; the collapsed block after each step below is that emitted result.</p>
+<h2 id="init-create-the-pool"><a class="header" href="#init-create-the-pool">Init: create the pool</a></h2>
+<p><code>fresh_pool</code> initializes a pool at a fresh seed and returns the admin and the derived <code>Pool</code>. Under the hood it builds a plain <code>InitializeBundle</code> (a <code>Bundle</code> with no <code>BundleFrom</code>, filled field by field) and sends <code>Initialize { seed, fee_bps, authority }</code>:</p>
+<pre><code class="language-rust">    let (_admin, pool) = world.fresh_pool(30);
+    md.step("Init: the pool opens at 0.30% fee, unlocked");
+    md.block("config", world.observe_config(&amp;pool));
+    let config: amm::state::Config = world.ctx.load(&amp;pool.config);
+    md.check("fee_bps", 30u16, config.fee_bps);</code></pre>
+<p><code>load</code> deserializes the <code>Config</code> account and we read the fee back. (<code>Pool::derive(seed, mint_x, mint_y)</code>, which <code>fresh_pool</code> calls, computes the pool’s PDAs and ATAs from the seed and the pair, so the test and the program agree on every address.)</p>
+<details> <summary>The recorded run: the pool opens at 0.30% fee</summary>
+<p><strong>config</strong></p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>field</th><th>value</th></tr>
+</thead>
+<tbody>
+<tr><td>seed</td><td>0</td></tr>
+<tr><td>fee_bps</td><td>30</td></tr>
+<tr><td>locked</td><td>false</td></tr>
+<tr><td>authority</td><td>set</td></tr>
+</tbody>
+</table>
+</div>
+<ul>
+<li><input disabled="" type="checkbox" checked=""> fee_bps: <code>30</code></li>
+</ul>
+</details>
+<h2 id="add-liquidity-then-assert-the-invariant"><a class="header" href="#add-liquidity-then-assert-the-invariant">Add liquidity, then assert the invariant</a></h2>
+<p>Liquidity provision deposits both tokens and mints LP shares back. The bundle comes straight from the two fixtures, so the eleven-account list never appears in the test:</p>
+<pre><code class="language-rust">    let alice = world.user("Alice", 10_000, 40_000);
+    world.deposit(&amp;alice, &amp;pool, 1_000, 4_000, 1);
+    md.step("Add liquidity: Alice deposits 1,000 X and 4,000 Y");
+    md.snapshot("pool vaults", &amp;world.observe_pool(&amp;pool));
+    md.check("vault X seeded", Some(1_000), world.ctx.svm.token_balance(&amp;pool.vault_x));
+    md.check("vault Y seeded", Some(4_000), world.ctx.svm.token_balance(&amp;pool.vault_y));</code></pre>
+<p>After it, the pool holds reserves, and we can read the constant product. The AMM-specific readers (a <code>k()</code> helper, a token-conservation check) don’t belong in the framework, so the test keeps them as local helpers; they read the vault balances with <code>world.ctx.svm.token_balance(&amp;pool.vault_x)</code> (which returns <code>Option&lt;u64&gt;</code>, <code>None</code> if the account doesn’t exist) and compute the invariant. This is the right division of labor: the framework gives you the balances, your test knows what they’re supposed to satisfy.</p>
+<details> <summary>The recorded run: Alice seeds the pool</summary>
+<p><strong>pool vaults</strong></p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>account</th><th>balance</th></tr>
+</thead>
+<tbody>
+<tr><td>VaultX</td><td>1000</td></tr>
+<tr><td>VaultY</td><td>4000</td></tr>
+<tr><td>LpVault</td><td>1000</td></tr>
+</tbody>
+</table>
+</div>
+<ul>
+<li><input disabled="" type="checkbox" checked=""> vault X seeded: <code>Some(1000)</code></li>
+<li><input disabled="" type="checkbox" checked=""> vault Y seeded: <code>Some(4000)</code></li>
+</ul>
+</details>
+<h2 id="swap-the-moment-the-invariant-matters"><a class="header" href="#swap-the-moment-the-invariant-matters">Swap: the moment the invariant matters</a></h2>
+<p>A swap is where a balance assertion isn’t enough; you have to assert a <em>relationship between</em> balances holds across the transaction. The constant product <code>k = reserve_x · reserve_y</code> must not <em>decrease</em> (it grows slightly, by the fee). And the swap is where <code>SwapBundle::from((&amp;pool, &amp;user))</code> does the most: ten accounts projected from two fixtures, in one line.</p>
+<p>The swap’s direction and amounts ride in a <code>SwapKind</code> enum (<code>ExactInput { amount_in, min_amount_out }</code> or <code>ExactOutput { amount_out, max_amount_in }</code>) plus an <code>a_to_b: bool</code>. The suite wraps the boolean in a readable <code>SwapDir::AtoB.a_to_b()</code> helper, but it’s a plain <code>bool</code> underneath:</p>
+<pre><code class="language-rust">    let bob = world.user("Bob", 1_000, 0);
+    let k_before = pool_k(&amp;world, &amp;pool);
+
+    world
+        .ctx
+        .tx(&amp;[&amp;bob.signer])
+        .build(
+            amm::SwapBundle::from((&amp;pool, &amp;bob)),
+            vix::Swap {
+                kind: SwapKind::ExactInput { amount_in: 100, min_amount_out: 1 },
+                a_to_b: true,
+            },
+        )
+        .send_ok();
+
+    md.step("Swap: Bob trades 100 X for Y; the constant product holds");
+    md.snapshot("pool vaults", &amp;world.observe_pool(&amp;pool));
+    let k_after = pool_k(&amp;world, &amp;pool);
+    md.check("k must not shrink", true, k_after &gt;= k_before);</code></pre>
+<p>Vault and Escrow asserted <em>where the tokens went</em>; the AMM asserts <em>that a mathematical property survived</em> the transaction.</p>
+<p>(Note we assert <code>k_after &gt;= k_before</code>, not equality: the fee means <code>k</code> ratchets up. And we don’t assert a specific <code>k</code> value, since that depends on the deposited amounts; we assert the <em>relationship</em>. Pinning a literal <code>k</code> would be the same mistake as pinning a literal compute count, see <a href="../inspect/compute-fees.html">Reading Compute &amp; Fees</a>.)</p>
+<details> <summary>The recorded run: Bob's swap, and the invariant holds</summary>
+<p><strong>pool vaults</strong> (after the swap: 100 X in, Y out)</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>account</th><th>balance</th></tr>
+</thead>
+<tbody>
+<tr><td>VaultX</td><td>1100</td></tr>
+<tr><td>VaultY</td><td>3640</td></tr>
+<tr><td>LpVault</td><td>1000</td></tr>
+</tbody>
+</table>
+</div>
+<ul>
+<li><input disabled="" type="checkbox" checked=""> k must not shrink: <code>true</code></li>
+</ul>
+</details>
+<h2 id="the-negative-path-a-locked-pool"><a class="header" href="#the-negative-path-a-locked-pool">The negative path: a locked pool</a></h2>
+<p>The AMM has an admin path that locks the pool, after which a swap must fail with <code>PoolLocked</code>. Here <a href="../running/executing.html"><code>send_err_named</code></a> does the work on the <code>Tx</code> chain: same <code>build</code>, different terminator.</p>
+<pre><code class="language-rust">    // The authority freezes trading; the pool is now locked.
+    world.set_locked(&amp;admin, &amp;pool, true);
+
+    let bob = world.user("Bob", 1_000, 0);
+    world
+        .ctx
+        .tx(&amp;[&amp;bob.signer])
+        .build(
+            amm::SwapBundle::from((&amp;pool, &amp;bob)),
+            vix::Swap {
+                kind: SwapKind::ExactInput { amount_in: 100, min_amount_out: 1 },
+                a_to_b: true,
+            },
+        )
+        .send_err_named("PoolLocked");</code></pre>
+<p><code>send_err_named</code> asserts the transaction failed <em>and</em> that the named error appears (substring-matched against the logs and the error field), so a refactor that changes which guard fires breaks the test loudly instead of letting a wrong-but-still-failing path pass. The happy and negative paths share every step up to the terminator. (The AMM’s real suite uses this throughout: its slippage tests use the very same <code>SwapBundle::from((&amp;pool, &amp;bob))</code>, swapping only the <code>SwapKind</code> and the terminator to <code>send_err_named("SlippageExceeded")</code>.)</p>
+<details> <summary>The recorded run: a locked pool rejects swaps</summary>
+<blockquote>
+<p>The pool authority can freeze trading. After <code>set_locked(true)</code>, a swap that would otherwise succeed is rejected with <code>PoolLocked</code>, and the reserves are left untouched.</p>
+</blockquote>
+<p><strong>A funded, unlocked pool</strong></p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>account</th><th>balance</th></tr>
+</thead>
+<tbody>
+<tr><td>VaultX</td><td>1000</td></tr>
+<tr><td>VaultY</td><td>4000</td></tr>
+<tr><td>LpVault</td><td>1000</td></tr>
+</tbody>
+</table>
+</div>
+<p><strong>After <code>set_locked(true)</code>: the swap is rejected, reserves untouched</strong></p>
+<p><strong>config</strong></p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>field</th><th>value</th></tr>
+</thead>
+<tbody>
+<tr><td>seed</td><td>0</td></tr>
+<tr><td>fee_bps</td><td>30</td></tr>
+<tr><td>locked</td><td>true</td></tr>
+<tr><td>authority</td><td>set</td></tr>
+</tbody>
+</table>
+</div>
+<p><strong>pool vaults</strong></p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>account</th><th>balance</th></tr>
+</thead>
+<tbody>
+<tr><td>VaultX</td><td>1000</td></tr>
+<tr><td>VaultY</td><td>4000</td></tr>
+<tr><td>LpVault</td><td>1000</td></tr>
+</tbody>
+</table>
+</div>
+<ul>
+<li><input disabled="" type="checkbox" checked=""> pool locked: <code>true</code></li>
+</ul>
+</details>
+<h2 id="what-the-deeper-nesting-shows"><a class="header" href="#what-the-deeper-nesting-shows">What the deeper nesting shows</a></h2>
+<p>A swap CPIs into the token program twice (input into a vault, output back out), so its <a href="../inspect/cpi-tree.html">CPI tree</a> has real depth. That depth is also where a security story hides, and the tree is what makes it legible.</p>
+<p>Start with the lock doing its job. The authority freezes the pool, and an honest trader’s swap bounces:</p>
+<pre><code class="language-console">── amm::Swap ───────────────────────────────────────────────
+Transaction  signers=[Bob]
+└── amm::Swap [1] ✗ …cu  signer=Bob
+    └── Error: PoolLocked
+Error: InstructionError(0, Custom(6008))
+Fee: 5000 lamports
+</code></pre>
+<p>So far so good: <code>locked == true</code> reads as “the pool is paused.” But that signal protects only the users who send <em>one</em> instruction at a time.</p>
+<div class="callout scandal">
+<p><strong>The Double Cross.</strong> The authority packs unlock, their own swap, and relock into a single atomic transaction:</p>
+</div>
+
+<pre><code class="language-rust">    // The Scenario verbs send one instruction per tx; the attack needs all three
+    // in ONE atomic transaction, so drop to program().build_ix(...) and send
+    // them together. The pool is locked; ix #1 unlocks it, ix #2 swaps while it's
+    // open, ix #3 relocks, all before any other transaction can be sequenced.
+    let unlock = world.ctx.program().build_ix(
+        amm::SetLockedBundle { authority: admin.pubkey(), config: pool.config },
+        vix::SetLocked { locked: false },
+    );
+    let swap = world.ctx.program().build_ix(
+        amm::SwapBundle::from((&amp;pool, &amp;admin)),
+        vix::Swap {
+            kind: SwapKind::ExactInput { amount_in: 100_000, min_amount_out: 1 },
+            a_to_b: true,
+        },
+    );
+    let relock = world.ctx.program().build_ix(
+        amm::SetLockedBundle { authority: admin.pubkey(), config: pool.config },
+        vix::SetLocked { locked: true },
+    );
+
+    let attack = world.ctx.send_instructions(&amp;[unlock, swap, relock], &amp;[&amp;admin.signer]);
+    md.check("the atomic attack succeeds (this is the bug)", true, attack.is_success());</code></pre>
+<p>By Solana’s atomicity, no other transaction can be sequenced between those three instructions, so the admin trades through a window that, from everyone else’s perspective, never opened. The captured tree is the smoking gun: three sibling top-level frames, all signed by <code>Admin</code>, the middle one a real swap with its two <code>Token::TransferChecked</code> children:</p>
+<pre><code class="language-console">Transaction  signers=[Admin]
+├── amm::SetLocked [1] ✓ …cu  signer=Admin
+├── amm::Swap [1] ✓ …cu  signer=Admin
+│   ├── Token::TransferChecked [2] ✓ …cu
+│   └── Token::TransferChecked [2] ✓ …cu
+└── amm::SetLocked [1] ✓ …cu  signer=Admin
+Fee: 5000 lamports
+</code></pre>
+<p>The test asserts this transaction <em>succeeds</em>, which is exactly the bug it surfaces (issue 001): the <code>require!(!locked)</code> guard bounces an honest swap but not an atomic unlock-first, and the mitigation (a timelock on unlock) is planned, not landed. Reading the rejected swap and the passing sandwich side by side is the whole point; the tree makes the attack legible at a glance, which a wall of base58 never would. The name you chose in the cast list comes back out in the rendered output, on a transaction with real surface area.</p>
+<h2 id="full-example"><a class="header" href="#full-example">Full example</a></h2>
+<p>The complete runnable AMM suite (init, add and remove liquidity, swap both directions, the locked-pool and slippage failure cases, and the admin paths) is <a href="https://github.com/cds-rs/anchor-litesvm/tree/turbin3/book/listings/cpamm"><code>book/listings/cpamm</code></a>, which CI builds and tests; clone the repo, <code>cd book/listings/cpamm</code>, and <code>cargo test</code> to run it yourself. The walkthrough above is the annotated tour of how the framework’s pieces compose on a program with real surface area: the two-fixture <code>BundleFrom</code> projection, the <code>Scenario</code> harness with deterministic identities, and the <code>Tx</code> chain sharing its build step across the happy and negative paths.</p>
+<hr>
+<p>That’s the book. You’ve gone from an empty <code>Cargo.toml</code> (<a href="../intro/why.html">Part I</a>) to asserting a constant-product invariant on a multi-hop swap, with every account a named actor and every transaction renderable four ways. The reference (rustdoc, via <code>cargo doc --no-deps --open</code>) has the exhaustive API.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../examples/escrow.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                            </a>
+
+                            <a rel="next prefetch" href="../agents/index.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../examples/escrow.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                    </a>
+
+                    <a rel="next prefetch" href="../agents/index.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                    </a>
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr-ef4e11c1.min.js"></script>
+        <script src="../mark-09e88c2c.min.js"></script>
+        <script src="../searcher-09f2665d.js"></script>
+
+        <script src="../clipboard-1626706a.min.js"></script>
+        <script src="../highlight-abc7f01d.js"></script>
+        <script src="../book-c22b7243.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../mermaid-eefea253.min.js"></script>
+        <script src="../mermaid-init-b5c74268.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

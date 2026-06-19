@@ -1,0 +1,16 @@
+# anchor-litesvm agent corpus
+
+> Machine-first documentation for writing and fixing Solana program tests with anchor-litesvm/testsvm. Every code block is included from a compiling, CI-tested crate.
+
+## Corpus
+
+- [Conventions, vocabulary, decision trees](https://cds-rs.github.io/anchor-litesvm/agent-skill/SKILL.md)
+- [writing-tests](https://cds-rs.github.io/anchor-litesvm/agent-skill/references/writing-tests.md): one canonical suite: world setup, cast list, act, assert
+- [dependencies](https://cds-rs.github.io/anchor-litesvm/agent-skill/references/dependencies.md): manifests per consumer shape (Anchor, Pinocchio, cross-engine)
+- [backends](https://cds-rs.github.io/anchor-litesvm/agent-skill/references/backends.md): the TestSVM matrix and a construction recipe per engine
+- [auditing](https://cds-rs.github.io/anchor-litesvm/agent-skill/references/auditing.md): security findings as byte-stable Reports; the two observability tiers
+- [failure-modes](https://cds-rs.github.io/anchor-litesvm/agent-skill/references/failure-modes.md): fixes indexed by literal error text
+
+## Optional
+
+- [The book](https://cds-rs.github.io/anchor-litesvm/): the same documentation rendered for humans
