@@ -41,9 +41,11 @@ broken_intra_doc_links = "deny"
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }
 
 [workspace.dependencies]
-# Temporary git dep: tracks the unreleased 0.12 in the fork (adds `cpi_tree`).
-# Switch back to `litesvm = "0.12"` once that ships on crates.io.
-litesvm = { git = "https://github.com/cds-rs/litesvm", branch = "main" }
+# Pinned to a specific commit for cohort reproducibility: 03bb2ff is the tip of
+# cds-rs/litesvm `feat/evergreen`, the branch the cohort tracks, so every cohort
+# member resolves the same litesvm. Move to `litesvm = "0.12"` once the
+# unreleased 0.12 (with `cpi_tree`) ships on crates.io.
+litesvm = { git = "https://github.com/cds-rs/litesvm", rev = "03bb2ff3e49321b9d62c7f91b4d0d6c1548b8be6" }
 testsvm = { path = "crates/testsvm" }
 anchor-lang = "1.0.0"
 solana-program = "3.0.0"
