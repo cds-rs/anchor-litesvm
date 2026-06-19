@@ -49,7 +49,7 @@ reads as "all good"; use `transition`, whose rendered before/after row is the
 finding. The diff is the evidence.
 
 ```rust
-{{#include ../../../crates/litesvm-utils/src/report.rs:transition}}
+{{#include ../../../crates/testsvm/src/report/core.rs:transition}}
 ```
 
 A structural-trust finding falls straight out of it: parse a sensible input,
