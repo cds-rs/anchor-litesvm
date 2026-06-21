@@ -25,9 +25,11 @@ mod console;
 mod core;
 mod markdown;
 mod render;
+mod scenario;
 
 pub use block::{MarkdownBlock, ToMarkdown};
 pub use core::{ActBuilder, Report};
+pub use scenario::{render_index, render_scenario};
 // `md_kv!` / `md_table!` are `#[macro_export]`, so they land at the crate root
 // regardless of which submodule defines them; no re-export needed here.
 //
