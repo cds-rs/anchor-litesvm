@@ -29,7 +29,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deserialized Anchor account. (The panicking `load` / `load_unchecked` are
   unchanged.)
 
+- (`testsvm-idl`): the generated client is now byte-stable to commit and
+  `include!`-able. Instructions are sorted by discriminator on ingest (a Quasar
+  IDL lists them in hash-map order, so the same program produced a different
+  client run to run), and the generated file's header is a plain `//` banner with
+  no inner `#![allow(..)]` (an inner attribute cannot live in an `include!`-d file
+  outside the crate root, so the old header blocked module inclusion).
+
+  Migration (only if you generate a client through `testsvm-idl`):
+  - if you `include!` the client into a module, apply the allow at the include
+    site: `#[allow(dead_code, unused_imports)] pub mod client { include!(..); }`
+    (the file no longer carries its own inner attribute).
+  - regenerate and commit the client once; the struct order may change
+    (per-instruction account order is unchanged, so it is a cosmetic, one-time
+    diff). A committed client you do not regenerate is unaffected.
+
 ### Added
+
+- `testsvm-quasar-idl` (new crate): a source-extractor that generates the
+  construction client straight from a quasar-lang program's source, replacing the
+  `quasar idl-build` scrape. `QuasarSource::from_crate(src_dir)` parses the crate
+  with `syn` (the `#[program]` instructions and the `#[derive(Accounts)]` structs
+  their `Ctx<T>` parameters name), implements `testsvm-idl`'s `IdlSource`, and
+  re-exports `emit_client`. The shape comes from the declaration site, so it is
+  deterministic (no hash-map ordering) and needs no IDL JSON.
+
+  Adopt it in a consumer's `build.rs` (no migration; it is opt-in):
+
+  ```toml
+  [build-dependencies]
+  testsvm-quasar-idl = { git = "https://github.com/cds-rs/anchor-litesvm", branch = "turbin3" }
+  ```
+
+  ```rust
+  // build.rs
+  use {std::{env, fs, path::Path}, testsvm_quasar_idl::{emit_client, QuasarSource}};
+  let src = Path::new(&env::var("CARGO_MANIFEST_DIR").unwrap()).join("../program/src");
+  // emit `cargo:rerun-if-changed=` for each .rs under `src` so it regenerates
+  // when the program changes, then:
+  let idl = QuasarSource::from_crate(&src).unwrap();
+  let out = Path::new(&env::var("OUT_DIR").unwrap()).join("client.rs");
+  fs::write(out, emit_client(&idl)).unwrap();
+  ```
+
+  Then include it behind the allow (see the Changed note above):
+  `#[allow(dead_code, unused_imports)] pub mod client { include!(concat!(env!("OUT_DIR"), "/client.rs")); }`.
+
+- `testsvm-idl`: `ArgType::Array`, so fixed-size array args (`[u8; N]`, e.g. a
+  32-byte commitment or entropy) encode instead of being skipped at the flat-args
+  boundary. Purely additive.
 
 - `anchor-litesvm`: `AnchorContext` implements `TestSVM`, so it is usable
   anywhere a `&mut impl TestSVM` is expected and inherits the trait vocabulary
