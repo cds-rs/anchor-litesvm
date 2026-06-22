@@ -378,6 +378,17 @@ fn split_camel(w: &str) -> Vec<String> {
 struct RawIdl {
     address: String,
     instructions: Vec<RawIx>,
+    /// Named type definitions (Anchor/Codama `types`); used to flatten a
+    /// `{"defined": {"name": X}}` arg into the fields of struct `X`.
+    #[serde(default)]
+    types: Vec<RawType>,
+}
+
+#[derive(serde::Deserialize)]
+struct RawType {
+    name: String,
+    #[serde(rename = "type")]
+    ty: serde_json::Value,
 }
 
 #[derive(serde::Deserialize)]
@@ -411,6 +422,13 @@ struct RawArg {
 /// format-dependent piece (wincode `DynBytes<u8>` = `U8`, borsh `String` = `U32`).
 fn parse_idl(json: &str, string_len: LenWidth) -> serde_json::Result<(String, Vec<IxDef>)> {
     let raw: RawIdl = serde_json::from_str(json)?;
+    // Index the struct types by name (field name -> field type), so a `defined`
+    // arg referencing one can be flattened into its fields.
+    let structs: std::collections::HashMap<String, Vec<(String, serde_json::Value)>> = raw
+        .types
+        .iter()
+        .filter_map(|t| Some((t.name.clone(), struct_fields(&t.ty)?)))
+        .collect();
     let mut instructions: Vec<IxDef> = raw
         .instructions
         .into_iter()
@@ -427,14 +445,7 @@ fn parse_idl(json: &str, string_len: LenWidth) -> serde_json::Result<(String, Ve
                     writable: a.writable,
                 })
                 .collect(),
-            args: ix
-                .args
-                .into_iter()
-                .map(|a| ArgDef {
-                    name: a.name,
-                    ty: arg_type(&a.ty, string_len),
-                })
-                .collect(),
+            args: flatten_args(ix.args, &structs, string_len),
         })
         .collect();
     // quasar-lang's `idl-build` emits the instruction list in hash-map order, so
@@ -444,6 +455,61 @@ fn parse_idl(json: &str, string_len: LenWidth) -> serde_json::Result<(String, Ve
     // and need not route through here.
     instructions.sort_by(|a, b| a.discriminator.cmp(&b.discriminator));
     Ok((raw.address, instructions))
+}
+
+/// The `(field_name, field_type)` list of a `{"kind":"struct","fields":[..]}`
+/// type, or `None` for any other shape (enum, alias) which we do not flatten.
+fn struct_fields(ty: &serde_json::Value) -> Option<Vec<(String, serde_json::Value)>> {
+    if ty.get("kind").and_then(|k| k.as_str()) != Some("struct") {
+        return None;
+    }
+    Some(
+        ty.get("fields")?
+            .as_array()?
+            .iter()
+            .filter_map(|f| {
+                Some((
+                    f.get("name")?.as_str()?.to_string(),
+                    f.get("type")?.clone(),
+                ))
+            })
+            .collect(),
+    )
+}
+
+/// The referenced type name of a `{"defined": "X"}` or `{"defined":{"name":"X"}}`
+/// arg, if it is one.
+fn defined_name(ty: &serde_json::Value) -> Option<String> {
+    let d = ty.get("defined")?;
+    d.as_str()
+        .map(String::from)
+        .or_else(|| d.get("name").and_then(|n| n.as_str()).map(String::from))
+}
+
+/// Build the instruction's arg list, flattening a `defined` flat-struct arg into
+/// its fields (a single `Make(MakeArgs)` arg becomes `seed`, `offered_amount`,
+/// ..). A `defined` type we cannot resolve to a struct falls through to
+/// [`arg_type`], which marks it [`ArgType::Unsupported`] (so the instruction is
+/// skipped at the flat-args boundary, unchanged from before).
+fn flatten_args(
+    args: Vec<RawArg>,
+    structs: &std::collections::HashMap<String, Vec<(String, serde_json::Value)>>,
+    string_len: LenWidth,
+) -> Vec<ArgDef> {
+    let mut out = Vec::new();
+    for a in args {
+        match defined_name(&a.ty).and_then(|n| structs.get(&n)) {
+            Some(fields) => out.extend(fields.iter().map(|(name, ty)| ArgDef {
+                name: name.clone(),
+                ty: arg_type(ty, string_len),
+            })),
+            None => out.push(ArgDef {
+                name: a.name,
+                ty: arg_type(&a.ty, string_len),
+            }),
+        }
+    }
+    out
 }
 
 fn arg_type(v: &serde_json::Value, string_len: LenWidth) -> ArgType {
@@ -655,5 +721,29 @@ mod tests {
         let out = emit_client(&quasar::QuasarIdl::from_json(idl).unwrap());
         assert!(out.contains("// SKIPPED `batch`"), "{out}");
         assert!(!out.contains("pub struct Batch"));
+    }
+
+    #[test]
+    fn a_defined_flat_struct_arg_is_flattened_into_its_fields() {
+        // A Pinocchio/Anchor instruction often carries a single `defined` struct
+        // arg (`Make(MakeArgs)`); when its fields are all flat scalars, inline
+        // them as the instruction's args (the flat-args model) instead of skipping
+        // the instruction at the boundary.
+        let idl = r#"{ "address": "11111111111111111111111111111111",
+            "instructions": [{ "name": "make", "discriminator": [0],
+                "accounts": [{"name":"maker","signer":true,"writable":true}],
+                "args": [{"name":"make_args","type":{"defined":{"name":"MakeArgs"}}}] }],
+            "types": [{ "name": "MakeArgs", "type": { "kind": "struct", "fields": [
+                {"name":"seed","type":"u64"},
+                {"name":"offered_amount","type":"u64"},
+                {"name":"expected_amount","type":"u64"} ] } }] }"#;
+        let out = emit_client(&anchor::AnchorIdl::from_json(idl).unwrap());
+        assert!(out.contains("pub struct Make {"), "{out}");
+        assert!(!out.contains("// SKIPPED `make`"), "{out}");
+        assert!(out.contains("pub seed: u64,"), "{out}");
+        assert!(out.contains("pub offered_amount: u64,"));
+        assert!(out.contains("pub expected_amount: u64,"));
+        // each field encodes in declaration (wire) order
+        assert!(out.contains("data.extend_from_slice(&self.seed.to_le_bytes());"));
     }
 }
