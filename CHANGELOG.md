@@ -75,6 +75,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Then include it behind the allow (see the Changed note above):
   `#[allow(dead_code, unused_imports)] pub mod client { include!(concat!(env!("OUT_DIR"), "/client.rs")); }`.
 
+  The extractor maps quasar-lang's `Address` arg type (its pubkey type, e.g. an
+  optional pool authority `Option<Address>`) to `Pubkey`, so pubkey-typed args
+  generate rather than being skipped at the flat-args boundary.
+
 - `testsvm-idl`: `ArgType::Array`, so fixed-size array args (`[u8; N]`, e.g. a
   32-byte commitment or entropy) encode instead of being skipped at the flat-args
   boundary. Purely additive.
