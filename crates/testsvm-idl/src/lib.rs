@@ -267,7 +267,13 @@ fn emit_instruction(out: &mut String, ix: &IxDef) {
         .map(|b| format!("{b}u8"))
         .collect::<Vec<_>>()
         .join(", ");
-    let _ = writeln!(out, "        let mut data = vec![{disc}];");
+    // `data` only needs `mut` if an arg extends it past the discriminator.
+    let data_decl = if ix.args.is_empty() {
+        "let data"
+    } else {
+        "let mut data"
+    };
+    let _ = writeln!(out, "        {data_decl} = vec![{disc}];");
     for arg in &ix.args {
         let _ = writeln!(
             out,
@@ -745,5 +751,19 @@ mod tests {
         assert!(out.contains("pub expected_amount: u64,"));
         // each field encodes in declaration (wire) order
         assert!(out.contains("data.extend_from_slice(&self.seed.to_le_bytes());"));
+    }
+
+    #[test]
+    fn an_argless_instruction_emits_immutable_data() {
+        // `data` is only ever extended by args; an instruction with none (e.g. a
+        // Pinocchio `Take`/`Cancel`) must emit `let data`, not `let mut data`,
+        // which would warn `unused_mut` at the call site.
+        let idl = r#"{ "address": "11111111111111111111111111111111",
+            "instructions": [{ "name": "cancel", "discriminator": [2],
+                "accounts": [{"name":"maker","signer":true,"writable":true}],
+                "args": [] }] }"#;
+        let out = emit_client(&quasar::QuasarIdl::from_json(idl).unwrap());
+        assert!(out.contains("let data = vec![2u8];"), "{out}");
+        assert!(!out.contains("let mut data = vec![2u8];"), "{out}");
     }
 }
