@@ -10,6 +10,9 @@ keywords = ["solana", "pinocchio", "litesvm", "idl"]
 [lints]
 workspace = true
 
+[lib]
+path = "src/lib.rs"
+
 [[bin]]
 name = "litesvm-pinocchio-idl"
 path = "src/main.rs"
