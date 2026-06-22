@@ -8,6 +8,7 @@ members = [
     "crates/litesvm-pinocchio-derive",
     "crates/litesvm-pinocchio-idl",
     "crates/testsvm-idl",
+    "crates/testsvm-quasar-idl",
 ]
 resolver = "2"
 exclude = [
