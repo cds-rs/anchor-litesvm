@@ -221,7 +221,9 @@ fn arg_type(ty: &syn::Type) -> ArgType {
         "i32" => ArgType::I32,
         "i64" => ArgType::I64,
         "bool" => ArgType::Bool,
-        "Pubkey" => ArgType::Pubkey,
+        // Quasar's `Address` is the pubkey type (the IDL emits it as `pubkey`):
+        // 32 bytes, same wire encoding as a solana `Pubkey`.
+        "Pubkey" | "Address" => ArgType::Pubkey,
         "String" => ArgType::Bytes { len: LenWidth::U8 },
         "Option" => match &seg.arguments {
             syn::PathArguments::AngleBracketed(ab) => match ab.args.first() {
@@ -434,5 +436,26 @@ mod tests {
         let mut sorted = discs.clone();
         sorted.sort();
         assert_eq!(discs, sorted, "instructions come out in discriminator order");
+    }
+
+    #[test]
+    fn maps_quasar_address_args_as_pubkey() {
+        // Quasar's `Address` is the pubkey type (the IDL emits it as `pubkey`), so
+        // an `Address` arg and an `Option<Address>` arg map to Pubkey rather than
+        // falling past the flat-args boundary.
+        let src = r#"
+            declare_id!("11111111111111111111111111111111");
+            #[program]
+            mod p {
+                #[instruction(discriminator = 0)]
+                pub fn cfg(ctx: Ctx<Cfg>, admin: Address, backup: Option<Address>) -> Result<(), E> { Ok(()) }
+            }
+            #[derive(Accounts)]
+            pub struct Cfg { #[account(mut)] pub signer: Signer }
+        "#;
+        let src = QuasarSource::from_sources(&[src.to_string()]).unwrap();
+        let args = &src.instructions()[0].args;
+        assert_eq!(args[0].ty, ArgType::Pubkey);
+        assert_eq!(args[1].ty, ArgType::Option(Box::new(ArgType::Pubkey)));
     }
 }
