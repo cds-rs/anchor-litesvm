@@ -83,6 +83,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   32-byte commitment or entropy) encode instead of being skipped at the flat-args
   boundary. Purely additive.
 
+- `testsvm-idl`: flattens a `defined` flat-struct arg into its fields. An
+  instruction whose only arg is a struct (`Make(MakeArgs)`, common for Pinocchio)
+  now generates `seed`, `offered_amount`, `expected_amount` (read from the IDL
+  `types` section) instead of being skipped. A `defined` type that is not a flat
+  struct still falls to the boundary; IDLs with no `types` section are unaffected.
+
+- `litesvm-pinocchio-idl`: exposed as a library. The source extraction is now
+  `pub fn idl_from_crate(crate_root, program_id, name) -> serde_json::Value`, with
+  the binary a thin CLI over it. A Pinocchio program's `build.rs` can extract its
+  Anchor IDL in-process and hand it to `testsvm-idl`'s `emit_client` (no JSON
+  file, no subprocess), the same source -> IDL -> client path the other engines use.
+
 - `anchor-litesvm`: `AnchorContext` implements `TestSVM`, so it is usable
   anywhere a `&mut impl TestSVM` is expected and inherits the trait vocabulary
   (`actor`, `prop`, `prop_mint`, `prop_token_account`, `deploy_from_file`,
