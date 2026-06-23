@@ -1,0 +1,21 @@
+[package]
+name = "testsvm-idl"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "IDL ingestion for testsvm: an IdlSource trait (one impl per IDL format) normalized into an instruction model, from which a named bundle + alias client is generated. Quasar today; Shank/Codama are additional impls."
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "testsvm-idl"
+path = "src/main.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

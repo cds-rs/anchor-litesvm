@@ -1,0 +1,7 @@
+@startuml
+left to right direction
+skinparam shadowing false
+rectangle "my_program" as Prog
+rectangle "data\n(PDA)" as Data
+Prog --> Data : owns
+@enduml

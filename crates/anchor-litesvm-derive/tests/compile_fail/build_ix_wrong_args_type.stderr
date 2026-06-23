@@ -1,0 +1,23 @@
+error[E0277]: `DoSomething` can't be built with bundle `Bundle`: no `BuildableIx<Bundle>` impl
+  --> tests/compile_fail/build_ix_wrong_args_type.rs:30:40
+   |
+30 |     let _ix = program.build_ix(bundle, DoSomething { seed: 1 });
+   |                       --------         ^^^^^^^^^^^^^^^^^^^^^^^ no `BuildableIx<Bundle>` for this args type
+   |                       |
+   |                       required by a bound introduced by this call
+   |
+help: the trait `BuildableIx<Bundle>` is not implemented for `DoSomething`
+  --> tests/compile_fail/build_ix_wrong_args_type.rs:17:1
+   |
+17 | pub struct DoSomething {
+   | ^^^^^^^^^^^^^^^^^^^^^^
+   = note: Add `#[derive(BundledPubkeys)] #[bundled_with(Bundle)]` to the matching `#[derive(Accounts)]` struct, or hand-write `impl BuildableIx<Bundle> for DoSomething`.
+   = note: If the args type *does* derive `BundledPubkeys` for a different bundle, double-check that the bundle you're passing to `build_ix` matches the one in `#[bundled_with(...)]`.
+note: required by a bound in `anchor_litesvm::Program::build_ix`
+  --> $WORKSPACE/crates/anchor-litesvm/src/program.rs
+   |
+   |     pub fn build_ix<B, A>(self, bundle: B, args: A) -> Instruction
+   |            -------- required by a bound in this associated function
+   |     where
+   |         A: BuildableIx<B>,
+   |            ^^^^^^^^^^^^^^ required by this bound in `Program::build_ix`
