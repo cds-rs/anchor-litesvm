@@ -21,17 +21,39 @@
 //! slug of the title) into a single document with a `just`-style concat step.
 
 mod block;
+mod canonical;
 mod console;
 mod core;
+mod fingerprint;
 mod markdown;
+mod normalize;
+mod observation;
 mod render;
+mod reporter;
 mod scenario;
 
 pub use block::{MarkdownBlock, ToMarkdown};
+pub use canonical::{canonical_json, fingerprint};
+pub use fingerprint::{diff, merkle, Change, ChangeKind, Manifest};
 pub use core::{ActBuilder, Report};
+pub use normalize::{normalize_default, NormalFrame, NormalRecord};
+pub use observation::{record, record_slug, summary, verdict, Anchor, ExecutionFacts, Expect, FactFrame, Observation, ReportRecord, SCHEMA_VERSION};
+pub use reporter::Reporter;
 pub use scenario::{render_index, render_scenario};
 // `md_kv!` / `md_table!` are `#[macro_export]`, so they land at the crate root
 // regardless of which submodule defines them; no re-export needed here.
 //
 // `Status` is `pub(super)` (visible within the `report` module tree); tests
 // that need it import it as `super::render::Status` from within the tree.
+
+#[cfg(feature = "fingerprint-baseline")]
+mod baseline;
+#[cfg(feature = "fingerprint-baseline")]
+pub use baseline::{baseline_diff, diff_record_maps, render_explain, write_baseline, RecordChange, RecordDiff, BASELINE_FILE};
+#[cfg(feature = "fingerprint-baseline")]
+mod cli;
+#[cfg(feature = "fingerprint-baseline")]
+pub use cli::run_cli;
+
+#[cfg(test)]
+mod proptests;
