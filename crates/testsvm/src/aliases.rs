@@ -97,14 +97,6 @@ impl Aliases {
         self.by_pubkey.get(pubkey).map(String::as_str)
     }
 
-    /// Every `(pubkey, name)` pair, for a consumer that must persist the whole
-    /// table (the observation report's per-test record carries it so the Reporter
-    /// can role-map program ids with no live engine). Unordered; the caller sorts
-    /// if it needs determinism.
-    pub fn entries(&self) -> Vec<(Pubkey, String)> {
-        self.by_pubkey.iter().map(|(k, v)| (*k, v.clone())).collect()
-    }
-
     /// The friendly name registered for `pubkey`, or a short `<8>…<4>`
     /// truncation of the raw key when it isn't aliased.
     ///

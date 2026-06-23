@@ -46,18 +46,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `testsvm`: the observation report. Each test emits one lossless JSON record
-  (`report::record(Observation { .. })`) to `target/test-results/`, carrying its
-  own identity (group, title, `test_file`, a source-line `Anchor`), declared
-  `Expect`, and the execution facts. A `report::Reporter` folds the corpus into a
-  sectioned index (with a per-test **Source** link) and JCS-canonicalizes +
-  sha256-Merkle-fingerprints the behavioral signature for regression detection.
-  Because capture is file-per-test and the fold is a separate step, it survives
-  `nextest`'s process-per-test model, where an in-process index cannot. The
-  committed-baseline tarball + `run_cli` live behind the `fingerprint-baseline`
-  feature (`flate2`/`tar`). `Aliases::entries()` exposes the table so a record can
-  carry it for engine-free role mapping.
-
 - `testsvm-quasar-idl` (new crate): a source-extractor that generates the
   construction client straight from a quasar-lang program's source, replacing the
   `quasar idl-build` scrape. `QuasarSource::from_crate(src_dir)` parses the crate
