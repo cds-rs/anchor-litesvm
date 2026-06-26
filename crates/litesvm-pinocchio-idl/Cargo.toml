@@ -1,0 +1,22 @@
+[package]
+name = "litesvm-pinocchio-idl"
+version = "0.4.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Host-side IDL extractor for Pinocchio programs: parse a crate's source for #[derive(Discriminator)] enums and #[account(..)] attributes, emit a solita/Metaplex IDL. The 'anchor build' step, owning the format instead of depending on a std IDL crate the no_std program cannot carry."
+keywords = ["solana", "pinocchio", "litesvm", "idl"]
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "litesvm-pinocchio-idl"
+path = "src/main.rs"
+
+[dependencies]
+syn = { workspace = true }
+serde_json = { workspace = true }
