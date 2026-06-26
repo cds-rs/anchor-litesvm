@@ -1,0 +1,5 @@
+error: missing #[bundled_with(BundleType)] - required by #[derive(BundledPubkeys)]
+ --> tests/compile_fail/missing_bundled_with.rs:4:8
+  |
+4 | struct Make {
+  |        ^^^^
