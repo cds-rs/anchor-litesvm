@@ -1,43 +1,42 @@
 # anchor-litesvm
 
-**Simplified Anchor testing with LiteSVM** - Similar syntax to anchor-client, 78% less code, no mock RPC needed.
+**Simplified Anchor testing with LiteSVM**: bundle-based instruction building, far less code, no mock RPC needed.
 
-[![Crates.io](https://img.shields.io/crates/v/anchor-litesvm.svg)](https://crates.io/crates/anchor-litesvm)
-[![Documentation](https://docs.rs/anchor-litesvm/badge.svg)](https://docs.rs/anchor-litesvm)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+> Part of the `turbin3` branch (anchor 1.0), distributed via git only (not crates.io).
 
 ## Overview
 
-`anchor-litesvm` provides a streamlined testing experience for Anchor programs. It combines the familiar syntax of anchor-client with the speed of LiteSVM, plus comprehensive testing utilities.
+`anchor-litesvm` provides a streamlined testing experience for Anchor programs. It pairs bundle-based instruction building with the speed of LiteSVM, plus comprehensive testing utilities.
 
 **Key Benefits:**
-- **78% less code** compared to raw LiteSVM
-- **40% faster compilation** than anchor-client (no network dependencies)
-- **No mock RPC** - zero configuration needed
-- **Familiar syntax** - similar to anchor-client, transferable knowledge
+- **Far less code** than raw LiteSVM
+- **Fast compilation**: no network dependencies
+- **No mock RPC**: zero configuration needed
+- **Named bundles**: order-independent account building, checked at compile time
 
 ## Installation
 
 ```toml
-[dev-dependencies]
-anchor-litesvm = "0.4"
+# Host-only: the test machinery, never compiled into the on-chain binary.
+[target.'cfg(not(target_os = "solana"))'.dependencies]
+anchor-litesvm = { git = "https://github.com/cds-rs/anchor-litesvm", branch = "turbin3" }
 ```
 
 ## Quick Start
 
 ```rust
-use anchor_litesvm::AnchorLiteSVM;
-use litesvm_utils::{AssertionHelpers, TestHelpers};
-use solana_signer::Signer;
-
-// Generate client types from your program
-anchor_lang::declare_program!(my_program);
+use anchor_litesvm::{AnchorLiteSVM, Signer, TestHelpers};
+use my_program::{instruction as vix, test_helpers::InitializeBundle};
 
 #[test]
 fn test_my_anchor_program() {
-    // 1. One-line setup - no mock RPC needed
+    // 1. One-line setup, no mock RPC. The name registers as a pubkey alias so
+    //    structured logs read `my_program::Initialize`, not the raw program id.
     let mut ctx = AnchorLiteSVM::build_with_program(
         my_program::ID,
+        "my_program",
         include_bytes!("../target/deploy/my_program.so"),
     );
 
@@ -45,26 +44,23 @@ fn test_my_anchor_program() {
     let user = ctx.svm.create_funded_account(10_000_000_000).unwrap();
     let mint = ctx.svm.create_token_mint(&user, 9).unwrap();
 
-    // 3. Build instruction with simplified syntax (similar to anchor-client)
-    let ix = ctx.program()
-        .accounts(my_program::client::accounts::Initialize {
-            user: user.pubkey(),
-            mint: mint.pubkey(),
-            system_program: solana_system_interface::program::id(),
-        })
-        .args(my_program::client::args::Initialize { amount: 1_000_000 })
-        .instruction()
-        .unwrap();
+    // 3. Build + send + assert in one chain. The bundle names the accounts; the
+    //    BundledPubkeys derive on the program orders them (no Vec<AccountMeta>,
+    //    no client codegen), and canonical program ids are auto-injected.
+    ctx.tx(&[&user])
+        .build(
+            InitializeBundle { user: user.pubkey(), mint: mint.pubkey() },
+            vix::Initialize { amount: 1_000_000 },
+        )
+        .send_ok(); // builds, sends, asserts success
 
-    // 4. Execute and verify
-    ctx.execute_instruction(ix, &[&user])
-        .unwrap()
-        .assert_success();
-
-    // 5. Deserialize Anchor accounts
-    let account_data: MyAccount = ctx.get_account(&pda).unwrap();
+    // 4. Read an Anchor account back, discriminator-checked.
+    let account: MyAccount = ctx.try_load(&pda).unwrap();
 }
 ```
+
+`InitializeBundle` is the one-time program-side setup shown in
+[Features](#one-call-instruction-building-with-bundledpubkeys) below.
 
 ## Why anchor-litesvm?
 
@@ -78,10 +74,10 @@ fn test_my_anchor_program() {
 
 ### No More Account Ordering Bugs
 
-The #1 pain point in Solana testing - eliminated:
+The #1 pain point in Solana testing, eliminated:
 
 ```rust
-// Raw LiteSVM - order matters, easy to get wrong
+// Raw LiteSVM: order matters, easy to get wrong
 let instruction = Instruction {
     accounts: vec![
         AccountMeta::new(maker.pubkey(), true),   // Must be position 0
@@ -91,29 +87,77 @@ let instruction = Instruction {
     ..
 };
 
-// anchor-litesvm - named fields, order doesn't matter
-let ix = ctx.program()
-    .accounts(my_program::client::accounts::Make {
-        escrow: escrow_pda,  // Any order works
-        maker: maker.pubkey(),
-        // Compiler ensures all fields present
-    })
-    .args(...)
-    .instruction()?;
+// anchor-litesvm: a named bundle, order doesn't matter
+ctx.tx(&[&maker])
+    .build(
+        MakeBundle { escrow: escrow_pda, maker: maker.pubkey() }, // any order
+        vix::Make { seed, amount },
+    )
+    .send_ok();
 ```
 
 ## Features
 
-### Simplified Instruction Building
+### One-Call Instruction Building with `BundledPubkeys`
+
+A **bundle** is a small struct of the pubkeys a test varies. The `BundledPubkeys` derive projects it into the program's `accounts::*` list and pairs it with the `instruction::*` args at compile time, so `ctx.tx(..).build(bundle, args)` (or `ctx.program().build_ix(bundle, args)`) replaces the `.accounts().args().instruction()` chain. The pairing is type-checked: passing `Deposit` args with a `Withdraw` bundle is a compile error, not a runtime failure.
+
+One-time setup in your program crate. The bundle is host-only, and the `cfg_attr` gates the derive off the on-chain build:
+
+```rust
+// src/test_helpers.rs
+#[derive(Copy, Clone, anchor_litesvm::Bundle)]
+pub struct DepositBundle {
+    pub user: Pubkey,
+    pub vault_state: Pubkey,
+    pub vault: Pubkey,
+}
+```
+
+```rust
+// on the instruction's #[derive(Accounts)] struct
+#[cfg_attr(
+    not(target_os = "solana"),
+    derive(anchor_litesvm::BundledPubkeys),
+    bundled_with(crate::test_helpers::DepositBundle),
+)]
+#[derive(Accounts)]
+pub struct Deposit<'info> { /* ... */ }
+```
+
+Canonical program ids (`Program<System>`, `Program<AssociatedToken>`, `Interface<TokenInterface>`) are auto-injected, so the bundle carries only the pubkeys you vary.
+
+In your tests:
+
+```rust
+let bundle = DepositBundle { user, vault_state, vault };
+
+// Happy path: build + send + assert in one chain.
+ctx.tx(&[&user]).build(bundle, vix::Deposit { amount: 1_000_000 }).send_ok();
+
+// Or get the raw Instruction:
+let ix = ctx.program().build_ix(bundle, vix::Deposit { amount: 1_000_000 });
+
+// Negative path: inject a deliberately-wrong account via a closure.
+ctx.tx(&[&user])
+    .build_with(bundle, vix::Deposit { amount: 1_000_000 }, |a| a.vault_state = wrong_pda)
+    .send_err_named("ConstraintSeeds");
+```
+
+A bundle can also be projected from several fixtures with `#[derive(BundleFrom)]` (a pool plus a user, say), and `#[derive(Bundle)]` gives it a `Default` so a test binds only the fields it varies (`..DepositBundle::default()`). See the [book](../../book/src/instructions/bundled-pubkeys.md) for the full tour.
+
+### Manual Instruction Building (escape hatch)
+
+The `.accounts(...).args(...).instruction()` chain stays available for full control over the accounts struct, or for a one-off test that skips the bundle setup:
 
 ```rust
 let ix = ctx.program()
-    .accounts(my_program::client::accounts::Transfer {
+    .accounts(my_program::accounts::Transfer {
         from: from_account,
         to: to_account,
         authority: user.pubkey(),
     })
-    .args(my_program::client::args::Transfer { amount: 100 })
+    .args(vix::Transfer { amount: 100 })
     .instruction()?;
 
 ctx.execute_instruction(ix, &[&user])?.assert_success();
@@ -123,10 +167,10 @@ ctx.execute_instruction(ix, &[&user])?.assert_success();
 
 ```rust
 // Deserialize with discriminator check
-let account: MyAccount = ctx.get_account(&pda)?;
+let account: MyAccount = ctx.try_load(&pda)?;
 
 // Deserialize without check (for PDAs with custom layouts)
-let account: MyAccount = ctx.get_account_unchecked(&pda)?;
+let account: MyAccount = ctx.try_load_unchecked(&pda)?;
 ```
 
 ### Event Parsing
@@ -193,13 +237,10 @@ let (pda, bump) = ctx.svm.get_pda_with_bump(
     &my_program::ID,
 );
 
-let ix = ctx.program()
-    .accounts(my_program::client::accounts::Initialize {
-        escrow: pda,
-        // ...
-    })
-    .args(my_program::client::args::Initialize { seed, bump })
-    .instruction()?;
+let ix = ctx.program().build_ix(
+    InitializeBundle { escrow: pda, /* ... */ },
+    vix::Initialize { seed, bump },
+);
 ```
 
 ### Error Testing
@@ -212,22 +253,21 @@ if !result.is_success() {
     println!("Error: {:?}", result.error());
 }
 
-// Or assert specific errors
+// Or assert specific errors (substring match in logs or error field).
 result.assert_error("InsufficientFunds");
-result.assert_anchor_error(MyError::InvalidAmount);
 ```
 
 ## Testing
 
 ```bash
-cargo test -p anchor-litesvm    # 11 tests
+cargo test -p anchor-litesvm
 ```
 
 ## Related Crates
 
-- [`litesvm-utils`](https://crates.io/crates/litesvm-utils) - Framework-agnostic utilities (included)
-- [`litesvm`](https://crates.io/crates/litesvm) - The underlying fast Solana VM
-- [`anchor-lang`](https://crates.io/crates/anchor-lang) - Anchor framework
+- [`litesvm-utils`](../litesvm-utils): framework-agnostic utilities (included)
+- [`litesvm`](https://crates.io/crates/litesvm): the underlying fast Solana VM
+- [`anchor-lang`](https://crates.io/crates/anchor-lang): Anchor framework
 
 ## License
 
