@@ -7,7 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING** (`anchor-litesvm`): `AnchorContext` now implements the `TestSVM`
+  trait, whose `get_account(&self, &Pubkey) -> Option<Account>` returns the raw
+  account. To free the name, the deserializing inherent methods were renamed:
+  - `ctx.get_account::<T>(addr)` (returns `Result<T, AccountError>`) is now
+    `ctx.try_load::<T>(addr)`.
+  - `ctx.get_account_unchecked::<T>(addr)` is now `ctx.try_load_unchecked::<T>(addr)`.
+
+  Migration, mechanically:
+  - `ctx.get_account::<T>(addr)?` becomes `ctx.try_load::<T>(addr)?`
+  - `ctx.get_account::<T>(addr).unwrap()` / `.expect(..)` becomes
+    `ctx.load::<T>(addr)` (the existing panicking sibling; drop the
+    `unwrap`/`expect`)
+  - `ctx.get_account_unchecked::<T>(addr)` becomes `ctx.try_load_unchecked`
+    (Result) or `ctx.load_unchecked` (panicking)
+
+  After the rename, `ctx.get_account(addr)` means the trait's raw
+  `Option<Account>` accessor; reach for `try_load` / `load` when you want a
+  deserialized Anchor account. (The panicking `load` / `load_unchecked` are
+  unchanged.)
+
 ### Added
+
+- `anchor-litesvm`: `AnchorContext` implements `TestSVM`, so it is usable
+  anywhere a `&mut impl TestSVM` is expected and inherits the trait vocabulary
+  (`actor`, `prop`, `prop_mint`, `prop_token_account`, `deploy_from_file`,
+  `label`, `alias_ata`) as default methods, alongside its Anchor-specific sugar
+  (`cast_actor`, `cast_mint`, `fund_ata`, `try_load` / `load`).
+- `testsvm`: cast-name uniqueness on `actor` / `prop` (a duplicate cast panics on
+  every engine); a `TokenTestSVM` extension trait (`prop_mint`,
+  `prop_token_account`, `alias_ata`) that hand-packs the stable SPL mint (82-byte)
+  and token-account (165-byte) layouts with no token-crate dependency; `label()`
+  and an `aliases()` accessor on the trait; and `model::Transaction::assemble`,
+  the single record builder every send adapter shares.
 
 - `litesvm-utils`: four timestamp-based helpers on the `TestHelpers` trait for
   testing time-locked logic (escrow expiries, vesting cliffs, etc.) without

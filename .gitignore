@@ -1,6 +1,12 @@
 # Rust
-/target/
+# build artifacts at ANY depth: the excluded testsvm-mollusk crate builds its
+# own target/ inside crates/, which a root-only /target/ missed (and let 596MB
+# of artifacts into history once; rewritten out).
+target/
 anchor-escrow-example/target/
+# assembled agent-skill artifact (scripts/assemble-agent-skill.py); the book
+# pages under book/src/agents/ are the source
+/build/
 **/*.rs.bk
 *.pdb
 

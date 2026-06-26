@@ -1,0 +1,60 @@
+name: docs
+
+# Build the mdBook so a broken book fails loudly, the same way the rustdoc
+# broken-link gate and the no_run doctests guard the generated reference. This
+# catches structural drift (a chapter renamed or dropped while still in
+# SUMMARY.md, a SUMMARY parse error, a preprocessor that won't run, a missing
+# {{#include}} target) and, via lychee over the built HTML, a broken
+# cross-chapter link.
+#
+# Scoped to book/ changes so it doesn't run on unrelated commits.
+
+on:
+  push:
+    branches: [main, turbin3]
+    paths:
+      - 'book/**'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    paths:
+      - 'book/**'
+      - '.github/workflows/docs.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  book:
+    name: build mdBook (+ link check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # Prebuilt binaries, pinned to the versions the book is authored against.
+      # mdbook-mermaid renders the diagrams. (mdbook-linkcheck is intentionally
+      # absent: it has no release compatible with mdBook 0.5; links are checked
+      # with lychee below instead.)
+      - name: Install mdbook and preprocessors
+        uses: taiki-e/install-action@v2
+        with:
+          tool: mdbook@0.5.3,mdbook-mermaid@0.17.0
+
+      # The mermaid runtime assets (mermaid.min.js, mermaid-init.js) are
+      # committed, so no `mdbook-mermaid install` is needed here.
+      - name: Build the book
+        run: mdbook build book
+
+      # Check links over the built HTML. `--offline` verifies that every
+      # relative link and asset resolves to a file that exists (the
+      # cross-chapter dead-link guard) without hitting the network, so it
+      # stays fast and non-flaky. Drop `--offline` to also validate external
+      # URLs, at the cost of network flakiness.
+      #
+      # 404.html is excluded: mdBook generates it with a root-relative "home"
+      # link (`href="/"`) that only resolves on a deployed server, which
+      # `--offline` (rightly) can't resolve without a web root.
+      - name: Check links (lychee)
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --offline --no-progress --exclude-path "book/book/404.html" "book/book/**/*.html"
+          fail: true
