@@ -28,7 +28,8 @@ fn main() {
     println!("- TestHelpers trait - Account and token creation");
     println!("- AssertionHelpers trait - Account state verification");
     println!("- TransactionResult - Log analysis and debugging");
-    println!("- ctx.program().accounts() - Simplified instruction building");
+    println!("- ctx.program().build_ix() - One-call instruction building (BuildableIx)");
+    println!("- ctx.program().accounts().args().instruction() - Manual escape hatch");
 
     println!("\nFor complete working examples, see the anchor-escrow-example tests.");
 }
@@ -41,7 +42,7 @@ fn example_token_operations() {
     let program_id = Pubkey::new_unique();
     let program_bytes = vec![]; // Would be include_bytes!("../target/deploy/program.so")
 
-    let mut ctx = AnchorLiteSVM::build_with_program(program_id, &program_bytes);
+    let mut ctx = AnchorLiteSVM::build_with_program(program_id, "example", &program_bytes);
 
     // Create participants using TestHelpers trait
     let alice = ctx.svm.create_funded_account(10_000_000_000).unwrap();
@@ -90,7 +91,7 @@ fn example_pda_operations() {
     let program_id = Pubkey::new_unique();
     let program_bytes = vec![];
 
-    let mut ctx = AnchorLiteSVM::build_with_program(program_id, &program_bytes);
+    let mut ctx = AnchorLiteSVM::build_with_program(program_id, "example", &program_bytes);
 
     // Create user account
     let user = ctx.svm.create_funded_account(10_000_000_000).unwrap();
@@ -116,7 +117,12 @@ fn example_pda_operations() {
     println!("  PDA: {}", pda);
     println!("  Bump: {}", bump);
 
-    // In a real test, you would now build an instruction using the simplified syntax:
+    // In a real test, you'd now build an instruction. With BuildableIx (recommended,
+    // assuming `impl BuildableIx<MyBundle> for my_program::instruction::Initialize`):
+    // let bundle = MyBundle { vault: pda, user: user.pubkey() };
+    // let ix = ctx.program().build_ix(bundle, my_program::instruction::Initialize { seed, bump });
+    //
+    // Or with the manual chain (escape hatch, when you need full control):
     // let ix = ctx.program()
     //     .accounts(my_program::accounts::Initialize {
     //         vault: pda,
@@ -138,7 +144,7 @@ fn example_batch_operations() {
     let program_id = Pubkey::new_unique();
     let program_bytes = vec![];
 
-    let mut ctx = AnchorLiteSVM::build_with_program(program_id, &program_bytes);
+    let mut ctx = AnchorLiteSVM::build_with_program(program_id, "example", &program_bytes);
 
     // Create multiple accounts at once using TestHelpers trait
     let accounts = ctx.svm.create_funded_accounts(10, 1_000_000_000).unwrap();
@@ -192,7 +198,7 @@ fn example_advanced_assertions() {
     let program_id = Pubkey::new_unique();
     let program_bytes = vec![];
 
-    let mut ctx = AnchorLiteSVM::build_with_program(program_id, &program_bytes);
+    let mut ctx = AnchorLiteSVM::build_with_program(program_id, "example", &program_bytes);
 
     let user = ctx.svm.create_funded_account(10_000_000_000).unwrap();
     let mint = ctx.svm.create_token_mint(&user, 9).unwrap();
@@ -246,7 +252,7 @@ fn example_transaction_analysis() {
     let program_id = Pubkey::new_unique();
     let program_bytes = vec![];
 
-    let mut ctx = AnchorLiteSVM::build_with_program(program_id, &program_bytes);
+    let mut ctx = AnchorLiteSVM::build_with_program(program_id, "example", &program_bytes);
     let _user = ctx.svm.create_funded_account(10_000_000_000).unwrap();
 
     // In a real scenario, you would execute an instruction and get a result:
@@ -301,7 +307,7 @@ fn example_error_recovery() {
     let program_id = Pubkey::new_unique();
     let program_bytes = vec![];
 
-    let mut ctx = AnchorLiteSVM::build_with_program(program_id, &program_bytes);
+    let mut ctx = AnchorLiteSVM::build_with_program(program_id, "example", &program_bytes);
 
     // Create accounts with different balances
     let rich_user = ctx.svm.create_funded_account(10_000_000_000).unwrap();
@@ -356,7 +362,7 @@ fn example_complete_workflow() {
 
     // 1. Setup
     println!("1. Setup test environment");
-    let mut ctx = AnchorLiteSVM::build_with_program(program_id, &program_bytes);
+    let mut ctx = AnchorLiteSVM::build_with_program(program_id, "example", &program_bytes);
     let user = ctx.svm.create_funded_account(10_000_000_000).unwrap();
     let mint = ctx.svm.create_token_mint(&user, 9).unwrap();
     let token_account = ctx
@@ -365,9 +371,13 @@ fn example_complete_workflow() {
         .unwrap();
     println!("   ✓ Created user, mint, and token account\n");
 
-    // 2. Build instruction using simplified syntax
-    println!("2. Build instruction (simplified syntax)");
-    // In a real test with actual program:
+    // 2. Build instruction
+    println!("2. Build instruction (BuildableIx or manual chain)");
+    // In a real test with actual program, prefer BuildableIx for the one-call form:
+    // let bundle = MyBundle { from: token_account, to: recipient_account, authority: user.pubkey() };
+    // let ix = ctx.program().build_ix(bundle, my_program::instruction::Transfer { amount: 500_000_000 });
+    //
+    // Or use the manual chain when you need to override individual fields:
     // let ix = ctx.program()
     //     .accounts(my_program::accounts::Transfer {
     //         from: token_account,
@@ -380,7 +390,7 @@ fn example_complete_workflow() {
     //     })
     //     .instruction()
     //     .unwrap();
-    println!("   ✓ Instruction built with ctx.program().accounts()\n");
+    println!("   ✓ Instruction built with ctx.program().build_ix() (or .accounts()...instruction() for manual)\n");
 
     // 3. Execute
     println!("3. Execute instruction");
@@ -398,7 +408,7 @@ fn example_complete_workflow() {
     println!("=== Key Takeaways ===");
     println!("• Use AnchorLiteSVM::build_with_program() for setup");
     println!("• Access helpers via ctx.svm (TestHelpers, AssertionHelpers)");
-    println!("• Build instructions with ctx.program().accounts()");
+    println!("• Build instructions with ctx.program().build_ix() (BuildableIx) or .accounts()...instruction() (manual)");
     println!("• Execute with ctx.execute_instruction()");
     println!("• Verify with assertion helpers");
 }
@@ -411,7 +421,7 @@ fn example_clock_manipulation() {
     let program_id = Pubkey::new_unique();
     let program_bytes = vec![];
 
-    let mut ctx = AnchorLiteSVM::build_with_program(program_id, &program_bytes);
+    let mut ctx = AnchorLiteSVM::build_with_program(program_id, "example", &program_bytes);
 
     println!("=== Clock and Slot Manipulation ===");
 

@@ -60,6 +60,32 @@ mod my_program {
             }
         }
     }
+
+    // BuildableIx adoption. In a real program this lives in a `test_helpers`
+    // module gated `#[cfg(not(target_os = "solana"))]` so it doesn't ship with
+    // the BPF binary.
+    use anchor_litesvm::BuildableIx;
+
+    #[derive(Copy, Clone)]
+    pub struct BundledPubkeys {
+        pub from: Pubkey,
+        pub to: Pubkey,
+        pub authority: Pubkey,
+    }
+
+    impl From<BundledPubkeys> for client::accounts::Transfer {
+        fn from(b: BundledPubkeys) -> Self {
+            Self {
+                from: b.from,
+                to: b.to,
+                authority: b.authority,
+            }
+        }
+    }
+
+    impl BuildableIx<BundledPubkeys> for client::args::Transfer {
+        type Accounts = client::accounts::Transfer;
+    }
 }
 
 fn main() {
@@ -161,7 +187,7 @@ fn example_complete_test() {
     let program_bytes = vec![]; // Would be include_bytes!("../target/deploy/my_program.so")
 
     // One-line setup (no mock RPC needed!)
-    let mut ctx = AnchorLiteSVM::build_with_program(my_program::ID, &program_bytes);
+    let mut ctx = AnchorLiteSVM::build_with_program(my_program::ID, "my_program", &program_bytes);
 
     // Create test accounts with integrated helpers
     let maker = ctx.svm.create_funded_account(10_000_000_000).unwrap();
@@ -197,6 +223,63 @@ fn example_complete_test() {
         .assert_success();
 
     // Clean assertions
+    ctx.svm.assert_token_balance(&maker_ata, 500_000_000);
+}
+
+/// Example: Same test, using BuildableIx for one-call instruction building.
+///
+/// Compare to `example_complete_test` above: the `.accounts(...).args(...).instruction()`
+/// chain collapses to a single `ctx.program().build_ix(bundle, args)` call, and the
+/// args/accounts pairing is checked at compile time (passing a different program's
+/// args here would be a type error, not a runtime failure).
+#[allow(dead_code)]
+fn example_buildable_ix_test() {
+    let program_bytes = vec![]; // Would be include_bytes!("../target/deploy/my_program.so")
+
+    let mut ctx = AnchorLiteSVM::build_with_program(my_program::ID, "my_program", &program_bytes);
+
+    let maker = ctx.svm.create_funded_account(10_000_000_000).unwrap();
+    let taker = ctx.svm.create_funded_account(10_000_000_000).unwrap();
+
+    let mint = ctx.svm.create_token_mint(&maker, 9).unwrap();
+    let maker_ata = ctx
+        .svm
+        .create_associated_token_account(&mint.pubkey(), &maker)
+        .unwrap();
+    ctx.svm
+        .mint_to(&mint.pubkey(), &maker_ata, &maker, 1_000_000_000)
+        .unwrap();
+
+    // Bundle the pubkeys once.
+    let bundle = my_program::BundledPubkeys {
+        from: maker_ata,
+        to: taker.pubkey(),
+        authority: maker.pubkey(),
+    };
+
+    // Happy path: one call.
+    let ix = ctx.program().build_ix(
+        bundle,
+        my_program::client::args::Transfer {
+            amount: 500_000_000,
+        },
+    );
+
+    ctx.execute_instruction(ix, &[&maker])
+        .unwrap()
+        .assert_success();
+
+    // Negative-path variant: deliberately override one of the bundle-derived
+    // accounts via a closure to verify the program rejects it.
+    let wrong_authority = Pubkey::new_unique();
+    let _bad_ix = ctx.program().build_ix_with(
+        bundle,
+        my_program::client::args::Transfer {
+            amount: 500_000_000,
+        },
+        |a| a.authority = wrong_authority,
+    );
+
     ctx.svm.assert_token_balance(&maker_ata, 500_000_000);
 }
 
