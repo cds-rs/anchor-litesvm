@@ -1,0 +1,40 @@
+[package]
+name = "testsvm-quasar"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/brimigs/anchor-litesvm"
+description = "TestSVM adapter for quasar-svm (Blueshift's Agave-native local SVM): the same conformance scenarios run on a third execution engine, in a graph that carries neither litesvm nor mollusk."
+
+# Deliberately OUTSIDE the workspace (root Cargo.toml `exclude`): quasar-svm
+# drags the full Agave internals (solana-program-runtime, solana-bpf-loader,
+# agave-syscalls), which cannot share one lockfile with the litesvm graph or
+# the mollusk graph. Same test, different backend, rebuild.
+
+[dependencies]
+testsvm = { path = "../testsvm" }
+# The cds-rs fork (branch-pinned for control), rather than blueshift-gg upstream
+# floating on its default branch: keeps the quasar engine on a source we own,
+# matching the cds-rs/mollusk dep.
+quasar-svm = { git = "https://github.com/cds-rs/quasar-svm", branch = "babelfish" }
+solana-account = "3.2"
+solana-keypair = "3.1"
+solana-message = "3.1"
+solana-pubkey = "3.0"
+solana-clock = "3.0"
+solana-signer = "3.0"
+solana-instruction = "3.2"
+solana-system-interface = "3.1"
+
+[dev-dependencies]
+# The escrow dogfood drives Quasar's own example program through this adapter.
+# Quasar's token helpers (in quasar-svm) fabricate the SPL accounts; the Make
+# instruction is hand-built from its flat layout. We do NOT pull
+# `quasar-escrow-client`: it pins `solana-address = "=2.2.0"` exactly, which
+# cannot co-resolve with a current solana-3.1 graph (solana-keypair 3.1.2 wants
+# solana-address 2.6.1). That exact pin is a real composition seam in Quasar's
+# generated client, captured here rather than worked around by forcing the whole
+# graph down to the 2.2.0 era. The program ELF is vendored under tests/fixtures
+# (a deliberate foreign-program fixture, cargo build-sbf'd from
+# blueshift-gg/quasar examples/escrow).
+spl-token-interface = "2.0.0"
