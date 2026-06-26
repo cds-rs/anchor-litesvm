@@ -1,0 +1,10 @@
+@startuml
+left to right direction
+skinparam shadowing false
+rectangle "Token Program" as Tok
+rectangle "Escrow Program" as Prog
+rectangle "vault (ATA)" as Vault
+rectangle "escrow (state)" as Escrow
+Tok --> Vault : owns
+Prog --> Escrow : owns
+@enduml

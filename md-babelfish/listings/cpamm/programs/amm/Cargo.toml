@@ -1,0 +1,37 @@
+[package]
+name = "amm"
+version = "0.1.0"
+# Anchor 1.0.x macros are tested against edition 2021; the rest of the
+# workspace is on 2024. Explicit override keeps macro expansion happy.
+edition = "2021"
+description = "Toy constant-product AMM (see docs/toy-amm.spec.md)"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "amm"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+
+[dependencies]
+# init-if-needed is required because user_lp ATA gets created on first deposit.
+anchor-lang = { version = "1.0.2", features = ["init-if-needed"] }
+anchor-spl = "1.0.0"
+amm-math = { path = "../../crates/amm-math" }
+
+# Host-only: the per-instruction Bundle / BundledPubkeys machinery (gated
+# `#[cfg(not(target_os = "solana"))]` in src/), never compiled into the BPF
+# binary. Matches the other book listings.
+[target.'cfg(not(target_os = "solana"))'.dependencies]
+anchor-litesvm = { path = "../../../../../crates/anchor-litesvm" }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }

@@ -1,0 +1,58 @@
+/* House styling on top of the stock theme, by variable and selector override
+ * only: no theme/ fork, so mdBook upgrades keep their own templates. Loaded
+ * via `additional-css` in book.toml. */
+
+/* The default 750px line wraps CPI trees and the wider tables; traces read
+ * best unwrapped. */
+:root {
+    --content-max-width: 960px;
+}
+
+/* `console` fences are the book's test-report voice: CPI trees, structured
+ * logs, rejection output. Denser and slightly smaller than code-under-
+ * discussion, so a trace reads as evidence rather than as prose. */
+pre code.language-console {
+    font-size: 0.85em;
+    line-height: 1.45;
+}
+
+/* Roomier chapter list; multi-line titles stay scannable. */
+.chapter li {
+    margin-bottom: 0.25rem;
+}
+
+/* Callouts, encoded by exception (the diagrams' vocabulary, in prose):
+ * routine prose gets no chrome; a scandal (the failure path under study)
+ * flags red 🚩; a spotlight (a runtime subtlety worth a second look) flags
+ * blue 🧐. Plain divs, no preprocessor:
+ *
+ *     <div class="callout scandal">
+ *
+ *     markdown body
+ *
+ *     </div>
+ */
+.callout {
+    border-left: 4px solid var(--quote-border);
+    background-color: var(--quote-bg);
+    padding: 0.75rem 1rem;
+    margin: 1rem 0;
+}
+.callout > *:first-child {
+    margin-top: 0;
+}
+.callout > *:last-child {
+    margin-bottom: 0;
+}
+.callout.scandal {
+    border-left-color: #d32f2f;
+}
+.callout.scandal > p:first-child::before {
+    content: "🚩 ";
+}
+.callout.spotlight {
+    border-left-color: #1976d2;
+}
+.callout.spotlight > p:first-child::before {
+    content: "🧐 ";
+}

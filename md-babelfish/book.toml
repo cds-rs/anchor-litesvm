@@ -1,0 +1,31 @@
+[book]
+title = "solana-babelfish (draft)"
+description = "A reference guide to anchor-litesvm: named accounts, rich CPI rendering, and tests where every account is a first-class actor."
+authors = ["anchor-litesvm contributors"]
+language = "en"
+src = "src"
+
+[output.html]
+default-theme = "rust"
+git-repository-url = "https://github.com/cds-rs/anchor-litesvm"
+edit-url-template = "https://github.com/cds-rs/anchor-litesvm/edit/turbin3/md-babelfish/{path}"
+additional-css = ["css/custom.css"]
+additional-js = ["mermaid.min.js", "mermaid-init.js"]
+
+[output.html.fold]
+enable = true
+level = 1
+
+# Mermaid diagrams appear throughout Part IV. The preprocessor renders the
+# ```mermaid``` fences into SVG. Install it with:
+#   cargo install mdbook-mermaid
+#   mdbook-mermaid install book   # writes the JS/CSS assets next to book.toml
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
+[output.html.playground]
+runnable = false
+
+# Link checking is done by lychee over the built HTML in CI (see
+# .github/workflows/docs.yml), not by an mdBook backend: mdbook-linkcheck has
+# no release compatible with mdBook 0.5's renderer protocol.

@@ -1,0 +1,45 @@
+[package]
+name = "escrow"
+version = "0.1.0"
+description = "Created with Anchor"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "escrow"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+no-log-ix-name = []
+idl-build = ["anchor-spl/idl-build", "anchor-lang/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+
+
+[dependencies]
+anchor-lang = {version = "1.0.2", features = ["init-if-needed"] }
+anchor-spl = "1.0.0"
+
+# Host-only: anchor-litesvm carries the litesvm test machinery which
+# isn't BPF-buildable. The `BundledPubkeys` / `AliasMirror` references in
+# instructions/*.rs are `#[cfg_attr(not(target_os = "solana"), ...)]`
+# gated, so the BPF binary stays clean.
+[target.'cfg(not(target_os = "solana"))'.dependencies]
+anchor-litesvm = { path = "../../../../../crates/anchor-litesvm" }
+
+# Most test types (Keypair, Pubkey, Signer, the harness, Report, ActorRegistry,
+# deterministic keypairs) come through the `anchor-litesvm` facade. The one thing
+# it does not expose is *pure* ATA derivation (it only offers
+# `create_associated_token_account`, which creates), so we keep a direct dep on
+# spl-associated-token-account to derive the vault and init-if-needed ATAs before
+# the program creates them. (Candidate to hoist as `TestHelpers::ata(owner, mint)`.)
+[dev-dependencies]
+spl-associated-token-account = { version = "8.0", features = ["no-entrypoint"] }
+
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }

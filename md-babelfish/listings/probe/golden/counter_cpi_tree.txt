@@ -1,0 +1,3 @@
+CPI Tree (6,364 BPF CU / 1,400,000 budget):
+└── Initialize (6,364 / 1,400,000 CU) counter
+    └── CreateAccount System

@@ -1,0 +1,15 @@
+@startuml
+left to right direction
+skinparam shadowing false
+actor "LP / Trader" as User
+rectangle "config\n(pool PDA)" as Config
+rectangle "vault_x" as Vx
+rectangle "vault_y" as Vy
+rectangle "mint_lp" as LP
+Config --> Vx : reserve X
+Config --> Vy : reserve Y
+Config --> LP : LP supply
+User ..> Vx : adds / swaps X
+User ..> Vy : adds / swaps Y
+User ..> LP : holds LP shares
+@enduml

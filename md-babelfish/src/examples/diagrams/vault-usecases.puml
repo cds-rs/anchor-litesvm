@@ -1,0 +1,15 @@
+@startuml
+left to right direction
+skinparam shadowing false
+actor Alice
+rectangle Vault {
+  usecase "initialize" as UC1
+  usecase "deposit" as UC2
+  usecase "withdraw" as UC3
+  usecase "close" as UC4
+}
+Alice --> UC1
+Alice --> UC2
+Alice --> UC3
+Alice --> UC4
+@enduml

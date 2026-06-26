@@ -1,0 +1,14 @@
+```mermaid
+flowchart LR
+    classDef signer fill:#d4edda,stroke:#28a745;
+    classDef program fill:#cce5ff,stroke:#007bff;
+    classDef writable fill:#fff3cd,stroke:#ffc107;
+    counter[counter]:::program
+    Alice([Alice]):::signer
+    Counter([Counter]):::signer
+    System[System]:::program
+    Alice -->|signs| counter
+    Alice -->|signs| System
+    Counter -->|signs| System
+    counter -->|writes| Counter
+```

@@ -1,0 +1,14 @@
+[package]
+name = "runner-mollusk"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Runs the shared probe spec on mollusk. Own lockfile: the mollusk graph
+# (agave-4.0 pins) cannot share a lock with the litesvm or quasar runners.
+[dependencies]
+probe-spec = { path = "../probe-spec" }
+testsvm-mollusk = { path = "../../../../crates/testsvm-mollusk" }
+testsvm = { path = "../../../../crates/testsvm" }
+
+[workspace]

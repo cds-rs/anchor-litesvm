@@ -1,0 +1,15 @@
+[package]
+name = "runner-quasar"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Runs the shared probe spec on quasar-svm. Own lockfile: quasar-svm drags the
+# full Agave internals, which cannot share a lock with the litesvm or mollusk
+# runners.
+[dependencies]
+probe-spec = { path = "../probe-spec" }
+testsvm = { path = "../../../../crates/testsvm" }
+testsvm-quasar = { path = "../../../../crates/testsvm-quasar" }
+
+[workspace]

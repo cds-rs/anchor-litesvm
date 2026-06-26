@@ -1,0 +1,15 @@
+[package]
+name = "runner-litesvm"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Runs the shared probe spec on the litesvm engine. Own lockfile (the litesvm
+# graph cannot share one with the mollusk or quasar runners).
+[dependencies]
+probe-spec = { path = "../probe-spec" }
+litesvm-utils = { path = "../../../../crates/litesvm-utils" }
+litesvm = { git = "https://github.com/cds-rs/litesvm", rev = "03bb2ff3e49321b9d62c7f91b4d0d6c1548b8be6" }
+testsvm = { path = "../../../../crates/testsvm" }
+
+[workspace]

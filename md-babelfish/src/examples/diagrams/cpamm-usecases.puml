@@ -1,0 +1,19 @@
+@startuml
+left to right direction
+skinparam shadowing false
+actor Authority
+actor LP
+actor Trader
+rectangle AMM {
+  usecase "initialize" as UC1
+  usecase "add_liquidity" as UC2
+  usecase "remove_liquidity" as UC3
+  usecase "swap" as UC4
+  usecase "set_locked" as UC5
+}
+Authority --> UC1
+LP --> UC2
+LP --> UC3
+Trader --> UC4
+Authority --> UC5
+@enduml

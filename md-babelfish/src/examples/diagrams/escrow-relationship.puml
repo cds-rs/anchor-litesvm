@@ -1,0 +1,12 @@
+@startuml
+left to right direction
+skinparam shadowing false
+actor Maker
+actor Taker
+rectangle "escrow\n(PDA, state)" as Escrow
+rectangle "vault\n(PDA, ATA)" as Vault
+Maker --> Escrow : opens, sets terms
+Escrow --> Vault : holds the locked stake
+Maker ..> Vault : deposits mint_a
+Taker ..> Maker : pays mint_b
+@enduml

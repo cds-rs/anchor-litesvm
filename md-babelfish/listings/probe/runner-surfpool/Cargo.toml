@@ -1,0 +1,17 @@
+[package]
+name = "runner-surfpool"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Runs the shared probe spec against a live surfnet over JSON-RPC. Gated behind
+# `rpc` and shipped as an example, not a test: it needs a running surfnet, so it
+# is not part of the cargo-test CI path.
+[features]
+rpc = ["litesvm-utils/rpc"]
+
+[dependencies]
+probe-spec = { path = "../probe-spec" }
+litesvm-utils = { path = "../../../../crates/litesvm-utils" }
+
+[workspace]

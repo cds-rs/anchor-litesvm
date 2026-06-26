@@ -1,0 +1,18 @@
+[package]
+name = "probe-spec"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# The probe specification, written once. Each runner crate (own lockfile, one
+# per engine) depends on this and runs it against its engine.
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+testsvm = { path = "../../../../crates/testsvm" }
+solana-instruction = "3.2"
+solana-pubkey = "3.0"
+solana-signer = "3.0"
+
+[workspace]

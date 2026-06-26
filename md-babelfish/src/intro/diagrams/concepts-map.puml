@@ -1,0 +1,33 @@
+@startuml
+left to right direction
+skinparam shadowing false
+skinparam defaultTextAlignment center
+skinparam rectangle {
+  roundCorner 10
+  BorderColor #444
+}
+
+rectangle "you write" as You #FAFAFA {
+  rectangle "Bundle\n(pubkeys you vary)" as Bundle #EAF2FF
+  rectangle "args\n(instruction::Foo)" as Args #EAF2FF
+  rectangle "signers\n(&[&Keypair])" as Signers #EAF2FF
+  rectangle "aliases\n(pubkey → name)" as Aliases #EAF2FF
+}
+
+rectangle "PDA & token\nhelpers" as Helpers #FFF6E5
+rectangle "Instruction" as Ix
+rectangle "TransactionResult" as Result #E9F9EE
+rectangle "rendered views\n(tree, sequence,\nauthority / ownership)" as Views
+rectangle "execution snapshot\n(authority flow,\naccount index)" as Snapshot
+rectangle "state assertions\n(ctx.svm.assert_*)" as Assert
+
+Helpers --> Bundle : fill
+Bundle --> Ix : build
+Args --> Ix : build
+Ix --> Result : tx(signers)\n.send_ok()
+Signers ..> Result : sign
+Aliases --> Views : names
+Result --> Views : print_*
+Result --> Snapshot : report_execution
+Result ..> Assert : check state
+@enduml

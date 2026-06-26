@@ -1,0 +1,43 @@
+[package]
+name = "vault"
+version = "0.1.0"
+description = "Created with Anchor"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "vault"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+
+
+[dependencies]
+anchor-lang = "1.0.2"
+
+# `test_helpers` lives in src/ (so the `BuildableIx` impls land in the vault
+# crate, satisfying the orphan rule), but it must not be compiled into the
+# BPF binary. A target-cfg'd normal dep pulls anchor-litesvm in only for
+# host builds; the module itself is `#[cfg(not(target_os = "solana"))]`.
+# ANCHOR: framework-dep
+[target.'cfg(not(target_os = "solana"))'.dependencies]
+anchor-litesvm = { path = "../../../../../crates/anchor-litesvm" }
+# ANCHOR_END: framework-dep
+
+
+# No `[dev-dependencies]`: the integration test reaches everything it needs
+# (Keypair, Pubkey, Signer, the test harness, Report, deterministic_keypair)
+# through the `anchor-litesvm` facade re-exports, so no direct `solana-*` test
+# deps are required.
+
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }
