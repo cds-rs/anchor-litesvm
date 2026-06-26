@@ -1,0 +1,19 @@
+[package]
+name = "testsvm-quasar-idl"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Source-extractor for quasar-lang programs: parse a crate's source with syn for the #[program] instructions and #[derive(Accounts)] structs, build testsvm-idl's IxDef model directly, and emit the client. The deterministic stage-1 replacement for `quasar idl-build` (read the declaration site, do not compile-and-scrape it)."
+keywords = ["solana", "quasar", "litesvm", "idl"]
+
+[lints]
+workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+testsvm-idl = { path = "../testsvm-idl" }
+syn = { workspace = true }
+quote = { workspace = true }
