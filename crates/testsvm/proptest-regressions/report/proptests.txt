@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc d2e9b2a7e4cf61ecc3262ebbba09d8ed29521bd6c90fcfcc5739d8d349248218 # shrinks to records = [NormalRecord { group: " ", title: "a", test_name: "a", test_file: "a", anchor: "A", verdict: "_", summary: ".", frames: [] }, NormalRecord { group: "a", title: "a", test_name: "A", test_file: "_", anchor: "0", verdict: "A", summary: "_", frames: [] }]
