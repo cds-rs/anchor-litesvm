@@ -47,9 +47,9 @@
 //! ### Transaction Helpers
 //! Execute transactions with automatic result analysis:
 //! ```rust,ignore
-//! let result = svm.send_instruction(ix, &[&signer])?;
-//! result.assert_success();
-//! assert!(result.compute_units() < 200_000);
+//! let result = svm.send_instruction(ix, &[&signer])?
+//!     .tap(|r| assert!(r.compute_units() < 200_000))
+//!     .assert_success();
 //! ```
 //!
 //! ### Assertion Helpers
@@ -105,9 +105,9 @@
 //! svm.mint_to(&mint.pubkey(), &maker_ata, &maker, 1_000_000_000).unwrap();
 //!
 //! // 4. Execute instruction and analyze results
-//! let result = svm.send_instruction(ix, &[&maker]).unwrap();
-//! result.assert_success();
-//! assert!(result.has_log("Transfer complete"));
+//! let result = svm.send_instruction(ix, &[&maker]).unwrap()
+//!     .tap(|r| assert!(r.has_log("Transfer complete")))
+//!     .assert_success();
 //!
 //! // 5. Verify with clean assertions
 //! svm.assert_token_balance(&maker_ata, 1_000_000_000);
@@ -135,8 +135,7 @@
 //!     svm.mint_to(&mint.pubkey(), &sender_ata, &sender, 1_000_000).unwrap();
 //!
 //!     // Execute transfer
-//!     let result = svm.send_instruction(transfer_ix, &[&sender]).unwrap();
-//!     result.assert_success();
+//!     let _ = svm.send_instruction(transfer_ix, &[&sender]).unwrap().assert_success();
 //!
 //!     // Verify
 //!     svm.assert_token_balance(&sender_ata, 500_000);
@@ -165,16 +164,46 @@
 //! - [`test_helpers`] - Test helper implementations
 //! - [`transaction`] - Transaction execution and result analysis
 
+pub mod actors;
 pub mod assertions;
+pub mod backend;
 pub mod builder;
+pub mod metaplex;
+pub mod observe;
 pub mod test_helpers;
+pub mod token_hooks;
+pub mod tokens;
 pub mod transaction;
 
 // Re-export main types for convenience
+pub use actors::{deterministic_keypair, seed_bytes, ActorRegistry};
 pub use assertions::AssertionHelpers;
+pub use backend::LiteSvmBackend;
+#[cfg(feature = "rpc")]
+pub use backend::RpcBackend;
 pub use builder::{LiteSVMBuilder, ProgramTestExt};
+pub use metaplex::{
+    Creator, MetadataArgs, MetaplexHelpers, TokenStandard, METADATA_SEED, MPL_TOKEN_METADATA_ID,
+};
+pub use observe::{
+    CpiForest, CpiTree, ExecutionMetadata, ExecutionObserver, ExecutionView, Observed, ObservedSvm,
+    ObserverRegistry, SignerAuthority,
+};
+// `report` is engine-neutral test-output vocabulary; it lives on the spine now.
+// Re-exported (module + types + the `md_*` macros) so the old `litesvm_utils`
+// paths keep resolving for the book and dogfooders.
+pub use testsvm::report;
+pub use testsvm::report::{ActBuilder, MarkdownBlock, Report, ToMarkdown};
+pub use testsvm::{md_kv, md_table};
 pub use test_helpers::TestHelpers;
-pub use transaction::{TransactionError, TransactionHelpers, TransactionResult};
+pub use testsvm::{model, Capabilities, TestSVM};
+pub use token_hooks::TransferHookTesting;
+pub use tokens::{TokenFabrication, TokenProgram, TOKEN_2022_ID};
+pub use transaction::{
+    AccountIndex, Aliases, AuthorityStory, ErrorNames, EventInfo, EventRegistry, InstructionInfo,
+    InstructionNames, InstructionTrace, TraceHandle, TraceRecorder, TransactionError,
+    TransactionHelpers, TransactionResult,
+};
 
 // Re-export commonly used external types
 pub use litesvm::LiteSVM;
