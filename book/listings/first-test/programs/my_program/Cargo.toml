@@ -1,0 +1,40 @@
+[package]
+name = "my_program"
+version = "0.1.0"
+description = "Created with Anchor"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "my_program"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+
+[dependencies]
+anchor-lang = "1.0.2"
+
+# `test_helpers` lives in src/ (so the `Bundle`/`BundledPubkeys` impls land in
+# this crate, satisfying the orphan rule), but it must not compile into the
+# BPF binary. A target-cfg'd normal dep pulls anchor-litesvm in only for host
+# builds; the module itself is `#[cfg(not(target_os = "solana"))]`.
+[target.'cfg(not(target_os = "solana"))'.dependencies]
+# Path dep so this listing compiles against the in-repo crate (CI tests the
+# book against the working tree). The book shows the git dependency the reader
+# should use; see book/src/intro/installation.md.
+anchor-litesvm = { git = "https://github.com/cds-rs/anchor-litesvm", branch = "turbin3" }
+
+# No `[dev-dependencies]`: the integration test reaches everything it needs
+# (Keypair, Pubkey, Signer, the harness, assertions, helpers) through the
+# anchor-litesvm facade re-exports.
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }

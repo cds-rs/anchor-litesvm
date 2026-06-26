@@ -1,0 +1,10 @@
+@startuml
+left to right direction
+skinparam shadowing false
+actor Alice
+rectangle "Vault Program\n(signs as vault PDA)" as Prog
+usecase "deposit\n(SOL in)" as Dep
+usecase "withdraw / close\n(SOL out)" as Wd
+Alice --> Dep : signs the tx
+Prog --> Wd : invoke_signed
+@enduml
