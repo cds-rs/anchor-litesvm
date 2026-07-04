@@ -117,6 +117,30 @@
 //! assert_eq!(account.authority, user.pubkey());
 //! ```
 //!
+//! ### Bundled Instruction Construction
+//!
+//! Instead of hand-filling `accounts::Foo { .. }.to_account_metas(None)`
+//! plus `instruction::Foo { .. }.data()` per instruction, generate a bundle
+//! type per instruction straight from the program's IDL and let
+//! [`Program::build_ix`](program::Program::build_ix) do the wiring:
+//!
+//! ```rust,ignore
+//! anchor_lang::declare_program!(my_program);
+//! anchor_litesvm::bundles_from_idl!(my_program);
+//!
+//! let ix = ctx.program().build_ix(
+//!     MakeBundle { maker: maker.pubkey(), mint_a, vault, /* ... */ },
+//!     my_program::client::args::Make { amount, deposit, .. },
+//! );
+//! ```
+//!
+//! `bundles_from_idl!` emits one `<Ix>Bundle` struct per instruction (one
+//! `Pubkey` field per account the IDL lists), a `From<<Ix>Bundle> for
+//! <accounts struct>` (auto-injecting accounts it can infer, like the system
+//! program), and a [`BuildableIx`] impl pairing the
+//! bundle with its args type. Adding an account to the program's IDL only
+//! requires regenerating; there's no hand-written builder to keep in sync.
+//!
 //! ### Send + Assert Shortcuts
 //!
 //! Most tests end in one of two shapes; the shortcuts collapse the
