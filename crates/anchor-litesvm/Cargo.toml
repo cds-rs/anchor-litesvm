@@ -17,7 +17,7 @@ solana-program = { workspace = true }
 solana-account = "3.4.0"
 solana-hash = "3.1.0"
 solana-keypair = "3.1.2"
-solana-signature = "3.4.0"
+solana-signature = "3.3.0"
 solana-signer = "3.0.0"
 solana-transaction = { version = "3.0.1", features = ["bincode"] }
 spl-token = { workspace = true }
