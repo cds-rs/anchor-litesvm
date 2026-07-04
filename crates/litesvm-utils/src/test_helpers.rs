@@ -57,6 +57,32 @@ pub trait TestHelpers {
         decimals: u8,
     ) -> Result<Keypair, Box<dyn Error>>;
 
+    /// Create and initialize a token mint *at a caller-chosen keypair*.
+    ///
+    /// Like [`create_token_mint`](Self::create_token_mint), but the mint keypair
+    /// is supplied rather than generated internally, so the mint pubkey (and
+    /// everything derived from it: PDAs, ATAs) is whatever the caller decides.
+    /// Pair this with [`deterministic_keypair`](crate::naming::deterministic_keypair)
+    /// to get a stable mint address across runs, which is what makes committed
+    /// test output (structured logs, reports) diff cleanly.
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use litesvm_utils::{TestHelpers, naming::deterministic_keypair};
+    /// # use litesvm::LiteSVM;
+    /// # use solana_keypair::Keypair;
+    /// # let mut svm = LiteSVM::new();
+    /// # let authority = Keypair::new();
+    /// let mint_kp = deterministic_keypair("myapp/v1", "mint:x");
+    /// let mint = svm.create_token_mint_at(&authority, &mint_kp, 6).unwrap();
+    /// ```
+    fn create_token_mint_at(
+        &mut self,
+        authority: &Keypair,
+        mint: &Keypair,
+        decimals: u8,
+    ) -> Result<(), Box<dyn Error>>;
+
     /// Create a token account for a mint
     ///
     /// # Example
@@ -117,6 +143,25 @@ pub trait TestHelpers {
         authority: &Keypair,
         amount: u64,
     ) -> Result<(), Box<dyn Error>>;
+
+    /// Read an SPL Token account's amount.
+    ///
+    /// Returns `None` if no account exists at `ata` (so a test can write
+    /// `assert!(svm.token_balance(&vault).is_none())` after a close).
+    /// Panics if the account exists but its data doesn't unpack as an
+    /// SPL Token account: that's a test-setup bug (wrong address, or
+    /// the program is using Token-2022 instead).
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use litesvm_utils::TestHelpers;
+    /// # use litesvm::LiteSVM;
+    /// # use solana_program::pubkey::Pubkey;
+    /// # let svm = LiteSVM::new();
+    /// # let ata = Pubkey::new_unique();
+    /// let balance = svm.token_balance(&ata).unwrap_or(0);
+    /// ```
+    fn token_balance(&self, ata: &Pubkey) -> Option<u64>;
 
     /// Derive a program-derived address
     ///
@@ -257,7 +302,16 @@ impl TestHelpers for LiteSVM {
         decimals: u8,
     ) -> Result<Keypair, Box<dyn Error>> {
         let mint = Keypair::new();
+        self.create_token_mint_at(authority, &mint, decimals)?;
+        Ok(mint)
+    }
 
+    fn create_token_mint_at(
+        &mut self,
+        authority: &Keypair,
+        mint: &Keypair,
+        decimals: u8,
+    ) -> Result<(), Box<dyn Error>> {
         // Calculate rent for mint account
         let rent = self.minimum_balance_for_rent_exemption(82);
 
@@ -283,13 +337,13 @@ impl TestHelpers for LiteSVM {
         let tx = Transaction::new_signed_with_payer(
             &[create_account_ix, init_mint_ix],
             Some(&authority.pubkey()),
-            &[authority, &mint],
+            &[authority, mint],
             self.latest_blockhash(),
         );
 
         self.send_transaction(tx)
             .map_err(|e| format!("Failed to create mint: {:?}", e.err))?;
-        Ok(mint)
+        Ok(())
     }
 
     fn create_token_account(
@@ -391,6 +445,16 @@ impl TestHelpers for LiteSVM {
         Ok(())
     }
 
+    fn token_balance(&self, ata: &Pubkey) -> Option<u64> {
+        use solana_program_pack::Pack;
+        let account = self.get_account(ata)?;
+        Some(
+            spl_token::state::Account::unpack(&account.data)
+                .expect("token_balance: account is not an SPL Token account")
+                .amount,
+        )
+    }
+
     fn derive_pda(&self, seeds: &[&[u8]], program_id: &Pubkey) -> (Pubkey, u8) {
         Pubkey::find_program_address(seeds, program_id)
     }
@@ -408,7 +472,8 @@ impl TestHelpers for LiteSVM {
     }
 
     fn get_unix_timestamp(&self) -> i64 {
-        self.get_sysvar::<solana_program::clock::Clock>().unix_timestamp
+        self.get_sysvar::<solana_program::clock::Clock>()
+            .unix_timestamp
     }
 
     fn warp_to_timestamp(&mut self, unix_timestamp: i64) {
@@ -580,6 +645,41 @@ mod tests {
     }
 
     #[test]
+    fn test_token_balance_returns_amount_for_existing_account() {
+        let mut svm = LiteSVM::new();
+        let authority = svm.create_funded_account(10_000_000_000).unwrap();
+        let mint = svm.create_token_mint(&authority, 9).unwrap();
+        let ata = svm
+            .create_associated_token_account(&mint.pubkey(), &authority)
+            .unwrap();
+
+        // Newly created ATA: exists, zero balance.
+        assert_eq!(svm.token_balance(&ata), Some(0));
+
+        svm.mint_to(&mint.pubkey(), &ata, &authority, 1_234_567)
+            .unwrap();
+        assert_eq!(svm.token_balance(&ata), Some(1_234_567));
+    }
+
+    #[test]
+    fn test_token_balance_returns_none_when_account_missing() {
+        let svm = LiteSVM::new();
+        // Random pubkey that was never created on chain.
+        let phantom = Pubkey::new_unique();
+        assert_eq!(svm.token_balance(&phantom), None);
+    }
+
+    #[test]
+    #[should_panic(expected = "not an SPL Token account")]
+    fn test_token_balance_panics_on_non_token_account() {
+        let mut svm = LiteSVM::new();
+        // The payer is a System-owned account, not a Token account.
+        // token_balance against it must panic to surface the test bug.
+        let payer = svm.create_funded_account(1_000_000_000).unwrap();
+        let _ = svm.token_balance(&payer.pubkey());
+    }
+
+    #[test]
     fn test_derive_pda() {
         let svm = LiteSVM::new();
         let program_id = Pubkey::new_unique();
@@ -658,6 +758,18 @@ mod tests {
 
         svm.advance_slot(5);
         assert_eq!(svm.get_current_slot(), 40);
+    }
+
+    #[test]
+    fn test_get_unix_timestamp_matches_clock_sysvar() {
+        let svm = LiteSVM::new();
+
+        let ts = svm.get_unix_timestamp();
+        let expected = svm
+            .get_sysvar::<solana_program::clock::Clock>()
+            .unix_timestamp;
+
+        assert_eq!(ts, expected);
     }
 
     #[test]

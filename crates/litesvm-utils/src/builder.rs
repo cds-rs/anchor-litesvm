@@ -191,11 +191,9 @@ mod tests {
         let program_id = Pubkey::new_unique();
         let program_bytes = vec![1, 2, 3, 4];
 
-        // Test that builder fluent API works - don't call build() to avoid validation
         let mut builder = LiteSVMBuilder::new();
         builder = builder.deploy_program(program_id, &program_bytes);
 
-        // Verify the program was added to the builder
         assert_eq!(builder.programs.len(), 1);
         assert_eq!(builder.programs[0].0, program_id);
     }

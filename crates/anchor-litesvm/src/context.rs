@@ -114,6 +114,8 @@ impl AnchorContext {
             self.payer.pubkey()
         };
 
+        let info = litesvm_utils::transaction::InstructionInfo::from_instruction(&instruction);
+
         // Build and sign the transaction
         let tx = Transaction::new_signed_with_payer(
             &[instruction.clone()],
@@ -121,17 +123,16 @@ impl AnchorContext {
             signers,
             self.svm.latest_blockhash(),
         );
+        let message = tx.message.clone();
 
         // Execute the transaction
         match self.svm.send_transaction(tx) {
-            Ok(result) => Ok(TransactionResult::new(
-                result,
-                Some(format!("instruction to {}", instruction.program_id)),
-            )),
+            Ok(result) => Ok(TransactionResult::new(result, Some(info), message)),
             Err(failed) => Ok(TransactionResult::new_failed(
                 format!("{:?}", failed.err),
                 failed.meta,
-                Some(format!("instruction to {}", instruction.program_id)),
+                Some(info),
+                message,
             )),
         }
     }
@@ -156,17 +157,18 @@ impl AnchorContext {
             signers,
             self.svm.latest_blockhash(),
         );
+        let message = tx.message.clone();
 
         // Execute the transaction
         match self.svm.send_transaction(tx) {
-            Ok(result) => Ok(TransactionResult::new(
-                result,
-                Some("batch transaction".to_string()),
-            )),
+            // A batch has no single canonical instruction to attribute a
+            // failure to, so `instruction` is `None` here (see `InstructionInfo`).
+            Ok(result) => Ok(TransactionResult::new(result, None, message)),
             Err(failed) => Ok(TransactionResult::new_failed(
                 format!("{:?}", failed.err),
                 failed.meta,
-                Some("batch transaction".to_string()),
+                None,
+                message,
             )),
         }
     }

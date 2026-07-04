@@ -4,7 +4,6 @@
 //! account states in tests.
 
 use litesvm::LiteSVM;
-use litesvm_token::spl_token;
 use solana_program::pubkey::Pubkey;
 use solana_program_pack::Pack;
 
