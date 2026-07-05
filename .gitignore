@@ -47,3 +47,7 @@ flamegraph.svg
 *.temp
 # mdBook build output
 book/book/
+
+# Vendored example program build artifacts
+examples/*/target/
+examples/*/.anchor/
