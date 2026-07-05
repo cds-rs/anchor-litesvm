@@ -307,6 +307,21 @@
       ]
     }
   ],
+  "events": [
+    {
+      "name": "Deposited",
+      "discriminator": [
+        111,
+        141,
+        26,
+        45,
+        161,
+        35,
+        100,
+        57
+      ]
+    }
+  ],
   "errors": [
     {
       "code": 6000,
@@ -315,6 +330,29 @@
     }
   ],
   "types": [
+    {
+      "name": "Deposited",
+      "docs": [
+        "A deposit landed: who, how much, and the vault's balance after."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "user",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "vault_balance",
+            "type": "u64"
+          }
+        ]
+      }
+    },
     {
       "name": "VaultState",
       "type": {
