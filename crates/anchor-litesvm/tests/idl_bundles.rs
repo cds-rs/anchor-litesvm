@@ -83,3 +83,39 @@ fn generated_bundles_ride_the_tx_builder() {
     );
     drop(tx);
 }
+
+#[test]
+fn build_ix_with_corrupts_exactly_one_derived_account() {
+    use anchor_litesvm::AnchorContext;
+    use litesvm::LiteSVM;
+
+    // The negative-path escape hatch: the bundle derives every account
+    // honestly, then the closure swaps exactly the one under attack, with
+    // the accounts struct's types intact.
+    let mut ctx = AnchorContext::new(LiteSVM::new(), vault::ID);
+    let user = Pubkey::new_unique();
+    let wrong_vault_state = Pubkey::new_unique();
+
+    let honest = ctx.program().build_ix(
+        DepositBundle { user },
+        vault::client::args::Deposit { amount: 7 },
+    );
+    let corrupted = ctx.program().build_ix_with(
+        DepositBundle { user },
+        vault::client::args::Deposit { amount: 7 },
+        |accounts| accounts.vault_state = wrong_vault_state,
+    );
+
+    assert_eq!(honest.accounts.len(), corrupted.accounts.len());
+    let diffs: Vec<usize> = honest
+        .accounts
+        .iter()
+        .zip(&corrupted.accounts)
+        .enumerate()
+        .filter(|(_, (a, b))| a.pubkey != b.pubkey)
+        .map(|(i, _)| i)
+        .collect();
+    assert_eq!(diffs.len(), 1, "exactly one slot corrupted");
+    assert_eq!(corrupted.accounts[diffs[0]].pubkey, wrong_vault_state);
+    assert_eq!(honest.data, corrupted.data, "args untouched");
+}
