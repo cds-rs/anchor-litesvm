@@ -491,3 +491,49 @@ fn identical_sends_are_fresh_by_default() {
         assert!(result.error().is_none(), "send #{i} should be fresh");
     }
 }
+
+#[test]
+fn decoded_events_render_as_badges_in_the_log_stream() {
+    use base64::Engine as _;
+    use std::sync::Arc;
+
+    let alice = Pubkey::new_unique();
+    let alice_b58 = alice.to_string();
+
+    let mut registry = EventRegistry::new();
+    let pairs = vec![
+        ("user".to_string(), alice_b58.clone()),
+        ("amount".to_string(), "1000000".to_string()),
+    ];
+    registry.register(
+        [1, 2, 3, 4, 5, 6, 7, 8],
+        "Deposited",
+        Arc::new(move |_bytes: &[u8]| Some(pairs.clone())),
+    );
+
+    let mut aliases = Aliases::default();
+    aliases.add(alice, "alice");
+
+    let payload =
+        base64::engine::general_purpose::STANDARD.encode([1u8, 2, 3, 4, 5, 6, 7, 8, 9, 9]);
+    let event_line = format!("Program data: {payload}");
+
+    // A decodable `Program data:` line renders as the event badge, fields
+    // alias-resolved.
+    let rendered = render_log_line(&event_line, &registry, &aliases);
+    assert_eq!(rendered, "🔔 Deposited { user: alice, amount: 1000000 }");
+
+    // An undecodable payload keeps its raw line: information is never dropped.
+    let unknown = format!(
+        "Program data: {}",
+        base64::engine::general_purpose::STANDARD.encode([9u8; 12])
+    );
+    assert_eq!(render_log_line(&unknown, &registry, &aliases), unknown);
+
+    // Ordinary lines pass through with alias substitution only.
+    let plain = format!("Program log: transfer from {alice_b58}");
+    assert_eq!(
+        render_log_line(&plain, &registry, &aliases),
+        "Program log: transfer from alice"
+    );
+}

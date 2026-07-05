@@ -119,6 +119,20 @@ pub struct TransactionResult {
     event_registry: EventRegistry,
 }
 
+/// One log line, display-ready: a `Program data:` payload the attached
+/// event registry can decode renders as its badge, fields alias-resolved;
+/// everything else, including a payload no decoder matches, keeps its raw
+/// text with registered pubkeys substituted. The raw line surviving an
+/// unmatched decode is deliberate: rendering must never drop information.
+fn render_log_line(log: &str, events: &EventRegistry, aliases: &Aliases) -> String {
+    if let Some(payload) = log.strip_prefix("Program data: ") {
+        if let Some(info) = events.decode_logged(payload) {
+            return info.badge_resolved(aliases);
+        }
+    }
+    aliases.substitute_in_text(log)
+}
+
 impl TransactionResult {
     /// Create a new TransactionResult wrapper for a successful transaction.
     ///
@@ -400,7 +414,7 @@ impl TransactionResult {
     /// [`with_aliases`](Self::with_aliases)); falls back to
     /// [`Aliases::default`] otherwise.
     pub fn logs_string(&self) -> String {
-        use std::fmt::Write;
+        use std::fmt::Write as _;
         let aliases_borrow;
         let aliases: &Aliases = match &self.aliases {
             Some(a) => a,
@@ -418,7 +432,12 @@ impl TransactionResult {
             writeln!(out, "Program: {}", aliases.label(&info.program_id)).unwrap();
         }
         for log in &self.inner.logs {
-            writeln!(out, "{}", aliases.substitute_in_text(log)).unwrap();
+            writeln!(
+                out,
+                "{}",
+                render_log_line(log, &self.event_registry, aliases)
+            )
+            .unwrap();
         }
         if let Some(err) = &self.error {
             writeln!(out, "Error: {}", err).unwrap();
