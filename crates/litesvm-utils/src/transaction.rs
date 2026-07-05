@@ -538,6 +538,22 @@ impl TransactionResult {
         self.inner.logs = logs;
     }
 
+    /// The error-code name from an `AnchorError` log line, if the run
+    /// produced one. Anchor spells the name out
+    /// (`... Error Code: SlippageExceeded. Error Number: 6009. ...`), so
+    /// the failure can render by name even when the code is a framework
+    /// error no IDL table registers.
+    fn anchor_error_code(&self) -> Option<String> {
+        self.inner.logs.iter().find_map(|log| {
+            let rest = log.split("Error Code: ").nth(1)?;
+            let name: String = rest
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .collect();
+            (!name.is_empty()).then_some(name)
+        })
+    }
+
     /// The run as a CPI tree: one line per frame with the program (and,
     /// when the logs name it, instruction) label, invoke depth, outcome
     /// mark, and per-frame compute units; transaction signers annotate the
@@ -567,8 +583,8 @@ impl TransactionResult {
             legend: Vec::new(),
             signer_names: Vec::new(),
             error_leaf: self
-                .resolved_error_name()
-                .map(str::to_string)
+                .anchor_error_code()
+                .or_else(|| self.resolved_error_name().map(str::to_string))
                 .or_else(|| self.error.clone()),
             events: &self.event_registry,
         };

@@ -563,6 +563,7 @@ fn tree_string_renders_frames_signers_error_and_legend() {
         "Program log: Instruction: AddLiquidity".to_string(),
         format!("Program {sys} invoke [2]"),
         format!("Program {sys} success"),
+        "Program log: AnchorError caused by account: config. Error Code: SlippageExceeded. Error Number: 6009. Error Message: slippage exceeded.".to_string(),
         format!("Program {program} consumed 47687 of 200000 compute units"),
         format!("Program {program} failed: custom program error: 0x1779"),
     ]);
@@ -589,6 +590,10 @@ fn tree_string_renders_frames_signers_error_and_legend() {
     assert!(
         out.contains(&format!("Alice = {alice}")),
         "legend maps Alice; got:\n{out}"
+    );
+    assert!(
+        out.contains("Error: SlippageExceeded"),
+        "AnchorError code name surfaces as the failure leaf; got:\n{out}"
     );
     assert!(
         !out.contains(&program.to_string()[..8.min(4)]) || true,
