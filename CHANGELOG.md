@@ -41,14 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instruction's args type with a caller-supplied pubkey bundle so a test
   doesn't have to hand-fill an accounts struct field by field.
 
-- `anchor-litesvm-derive` (new crate): three fixture derives —
-  `#[derive(Bundle)]` (a `Default` impl for a `Pubkey`-only struct, filling
-  every field with a fresh placeholder), `#[derive(BundleFrom)]` (projects a
-  bundle from multiple upstream fixtures), and `#[derive(AliasMirror)]`
-  (registers every `Pubkey` field of a fixture into an `AnchorContext`'s
-  alias table in one call).
-
-- `anchor-litesvm-derive`: `bundles_from_idl!`, a proc-macro invoked
+- `anchor-litesvm-derive` (new crate): `bundles_from_idl!`, a proc-macro invoked
   alongside `anchor_lang::declare_program!` against the same committed IDL.
   Per instruction, it emits a `<Ix>Bundle` struct (one `Pubkey` field per
   account the IDL can't infer), a `From<<Ix>Bundle> for <accounts struct>`

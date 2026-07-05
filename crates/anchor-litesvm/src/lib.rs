@@ -181,7 +181,6 @@
 //! - [`context`] - Main test context (`AnchorContext`)
 //! - [`events`] - Event parsing helpers
 //! - [`instruction`] - Instruction building utilities
-//! - [`lazy`] - Late-bound bundle fields resolved against live SVM state
 //! - [`program`] - Simplified Program API
 //! - [`tx`] - Fluent build + send + expect chain
 
@@ -192,20 +191,19 @@ pub mod context;
 mod event_idl;
 pub mod events;
 pub mod instruction;
-pub mod lazy;
 pub mod program;
 pub mod tx;
 
 // Re-export main types for convenience
 pub use account::{get_anchor_account, get_anchor_account_unchecked, AccountError};
-pub use anchor_litesvm_derive::{bundles_from_idl, AliasMirror, Bundle, BundleFrom};
+pub use anchor_litesvm_derive::bundles_from_idl;
 pub use buildable::BuildableIx;
 pub use builder::{AnchorLiteSVM, ProgramTestExt};
 pub use context::AnchorContext;
 pub use events::{parse_event_data, EventError, EventHelpers};
 pub use instruction::{build_anchor_instruction, calculate_anchor_discriminator};
-pub use lazy::{BundleDefault, Lazy, Resolvable, Resolve, ResolveField};
 pub use program::{InstructionBuilder, Program};
+pub use tx::Resolvable;
 pub use tx::Tx;
 
 // Re-export litesvm-utils functionality for convenience

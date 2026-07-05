@@ -62,3 +62,24 @@ fn injected_programs_lists_system_program() {
         .iter()
         .any(|(_, name)| *name == "system_program"));
 }
+
+#[test]
+fn generated_bundles_ride_the_tx_builder() {
+    use anchor_litesvm::AnchorContext;
+    use litesvm::LiteSVM;
+    use solana_keypair::Keypair;
+
+    // Build-only: the emitted no-op `Resolvable` is what lets a generated
+    // bundle satisfy `Tx::build`'s bound; no program deploy needed to
+    // prove the instruction assembles.
+    let mut ctx = AnchorContext::new(LiteSVM::new(), vault::ID);
+    let payer = Keypair::new();
+    let user = Pubkey::new_unique();
+
+    let signers = [&payer];
+    let tx = ctx.tx(&signers).build(
+        DepositBundle { user },
+        vault::client::args::Deposit { amount: 7 },
+    );
+    drop(tx);
+}

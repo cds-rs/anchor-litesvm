@@ -30,7 +30,6 @@ use quote::quote;
 use syn::parse::{Parse, ParseStream};
 use syn::{Ident, LitStr, Token};
 
-use crate::alias_mirror::pascal_case;
 use crate::classify::{classify, Classified, DeriveProgram, FieldReason, Role};
 use crate::idl::{Idl, IdlInstruction, IdlSeed};
 
@@ -177,6 +176,12 @@ fn emit_instruction(prog: &Ident, ix: &IdlInstruction, c: &Classified) -> TokenS
 
         impl ::anchor_litesvm::BuildableIx<#bundle_ident> for #prog::client::args::#ix_ty {
             type Accounts = #prog::client::accounts::#ix_ty;
+        }
+
+        // Generated bundles derive their PDAs eagerly in `From`, so the
+        // pre-projection hook `Tx::build` runs has nothing left to do.
+        impl ::anchor_litesvm::Resolvable for #bundle_ident {
+            fn resolve_all(&mut self, _ctx: &::anchor_litesvm::AnchorContext) {}
         }
     }
 }
@@ -680,4 +685,21 @@ mod expand_emit_tests {
             "token_program's doc must carry the well-known-default note: {out}"
         );
     }
+}
+
+/// `vault_x` -> `VaultX`, `lp_vault` -> `LpVault`, `mint` -> `Mint`.
+fn pascal_case(snake: &str) -> String {
+    let mut out = String::with_capacity(snake.len());
+    let mut capitalize_next = true;
+    for ch in snake.chars() {
+        if ch == '_' {
+            capitalize_next = true;
+        } else if capitalize_next {
+            out.extend(ch.to_uppercase());
+            capitalize_next = false;
+        } else {
+            out.push(ch);
+        }
+    }
+    out
 }

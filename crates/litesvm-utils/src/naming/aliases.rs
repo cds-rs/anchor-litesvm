@@ -91,8 +91,7 @@ impl Aliases {
 
     /// Look up a name for a `Pubkey`. Used by `LegendCollector` while
     /// rendering program IDs and signer pubkeys; also exposed for
-    /// callers that want to verify aliasing state directly (the
-    /// `AliasMirror` derive's integration tests, for instance).
+    /// callers that want to verify aliasing state directly.
     pub fn resolve_by_pubkey(&self, pubkey: &Pubkey) -> Option<&str> {
         self.by_pubkey.get(pubkey).map(String::as_str)
     }
