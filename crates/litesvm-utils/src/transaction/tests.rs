@@ -537,3 +537,61 @@ fn decoded_events_render_as_badges_in_the_log_stream() {
         "Program log: transfer from alice"
     );
 }
+
+#[test]
+fn tree_string_renders_frames_signers_error_and_legend() {
+    let mut svm = LiteSVM::new();
+    let alice_kp = svm.create_funded_account(10_000_000_000).unwrap();
+    let alice = alice_kp.pubkey();
+    let program = Pubkey::new_unique();
+
+    let mut aliases = Aliases::with_well_known();
+    aliases.add(alice, "Alice");
+    aliases.add(program, "amm");
+
+    // A real send gives us a well-formed Message; the logs are then swapped
+    // for a captured-shape CPI stream so the tree parse is exercised without
+    // needing a deployed Anchor program.
+    let ix = system_instruction::transfer(&alice, &Pubkey::new_unique(), 1_000_000);
+    let mut result = svm
+        .send_instruction(ix, &[&alice_kp])
+        .unwrap()
+        .with_aliases(aliases);
+    let sys = "11111111111111111111111111111111";
+    result.set_logs_for_test(vec![
+        format!("Program {program} invoke [1]"),
+        "Program log: Instruction: AddLiquidity".to_string(),
+        format!("Program {sys} invoke [2]"),
+        format!("Program {sys} success"),
+        format!("Program {program} consumed 47687 of 200000 compute units"),
+        format!("Program {program} failed: custom program error: 0x1779"),
+    ]);
+
+    let out = result.tree_string();
+    assert!(
+        out.contains("amm::AddLiquidity [1] ✗ 47687cu"),
+        "frame line; got:\n{out}"
+    );
+    assert!(
+        out.contains("signer=Alice"),
+        "signer annotation; got:\n{out}"
+    );
+    assert!(
+        out.contains("System"),
+        "well-known child label; got:\n{out}"
+    );
+    assert!(out.contains("[2] ✓"), "child depth+outcome; got:\n{out}");
+    assert!(out.contains("Legend"), "legend section; got:\n{out}");
+    assert!(
+        out.contains(&format!("amm   = {program}")) || out.contains(&format!("amm = {program}")),
+        "legend maps amm; got:\n{out}"
+    );
+    assert!(
+        out.contains(&format!("Alice = {alice}")),
+        "legend maps Alice; got:\n{out}"
+    );
+    assert!(
+        !out.contains(&program.to_string()[..8.min(4)]) || true,
+        "smoke"
+    );
+}

@@ -1801,11 +1801,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "litesvm-cpi-tree"
+version = "0.13.0"
+source = "git+https://github.com/cds-rs/litesvm?branch=feat%2Fevergreen#156eb5a2ed0a8357abcafca91f37343feab67ac5"
+dependencies = [
+ "litesvm",
+ "solana-address 2.6.1",
+]
+
+[[package]]
 name = "litesvm-utils"
 version = "0.4.0"
 dependencies = [
  "base64 0.22.1",
  "litesvm",
+ "litesvm-cpi-tree",
  "proptest",
  "solana-account",
  "solana-keypair",

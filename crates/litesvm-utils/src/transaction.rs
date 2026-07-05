@@ -133,6 +133,123 @@ fn render_log_line(log: &str, events: &EventRegistry, aliases: &Aliases) -> Stri
     aliases.substitute_in_text(log)
 }
 
+/// The invariant working set of one [`TransactionResult::tree_string`]
+/// walk: naming tables, the legend accumulated in first-use order, the
+/// transaction signers, the failure leaf, and the event decoders. Frames
+/// and cursor state travel as arguments; everything here is constant
+/// across the recursion.
+struct TreeRender<'a> {
+    aliases: &'a Aliases,
+    /// Names the default table already knows (well-known programs); those
+    /// never earn a legend row.
+    well_known: Aliases,
+    legend: Vec<(String, Pubkey)>,
+    signer_names: Vec<String>,
+    error_leaf: Option<String>,
+    events: &'a EventRegistry,
+}
+
+impl TreeRender<'_> {
+    /// A pubkey's display name; a test-registered name is recorded for the
+    /// legend the first time it appears.
+    fn label(&mut self, pk: &Pubkey) -> String {
+        let name = self.aliases.label(pk);
+        if self.well_known.resolve_by_pubkey(pk).is_none()
+            && self.aliases.resolve_by_pubkey(pk).is_some()
+            && !self.legend.iter().any(|(n, _)| n == &name)
+        {
+            self.legend.push((name.clone(), *pk));
+        }
+        name
+    }
+
+    fn write_frame(
+        &mut self,
+        out: &mut String,
+        frame: &litesvm_cpi_tree::CpiFrame,
+        prefix: &str,
+        is_last: bool,
+        depth: usize,
+    ) {
+        use litesvm_cpi_tree::{CpiOutcome, FrameLog};
+        use std::fmt::Write as _;
+
+        let connector = if is_last {
+            "\u{2514}\u{2500}\u{2500} "
+        } else {
+            "\u{251c}\u{2500}\u{2500} "
+        };
+        let mark = match &frame.outcome {
+            CpiOutcome::Success => "\u{2713}",
+            CpiOutcome::Failed { .. } => "\u{2717}",
+            CpiOutcome::Truncated => "\u{22ef}",
+        };
+        let cu = match frame.compute_units {
+            Some(c) => format!("{}cu", c.consumed),
+            None => "(no cu)".to_string(),
+        };
+        let mut line = self.label(&frame.program_id);
+        if let Some(ix) = &frame.instruction_name {
+            line = format!("{line}::{ix}");
+        }
+        write!(out, "{prefix}{connector}{line} [{depth}] {mark} {cu}").unwrap();
+        if depth == 1 && !self.signer_names.is_empty() {
+            write!(out, "  signer={}", self.signer_names.join(",")).unwrap();
+        }
+        writeln!(out).unwrap();
+
+        let child_prefix = if is_last {
+            format!("{prefix}    ")
+        } else {
+            format!("{prefix}\u{2502}   ")
+        };
+        // Decoded events render inside their frame; undecodable data and
+        // plain msg lines stay out of the tree (the flat view keeps them).
+        let badges: Vec<String> = frame
+            .logs
+            .iter()
+            .filter_map(|l| match l {
+                FrameLog::Data(payload) => self
+                    .events
+                    .decode_logged(payload)
+                    .map(|info| info.badge_resolved(self.aliases)),
+                FrameLog::Msg(_) => None,
+            })
+            .collect();
+        // The resolved failure renders once, as a leaf on the top-level
+        // failed frame; inner failed frames keep their ✗ mark without
+        // restating the same error down the spine.
+        let failed = depth == 1 && matches!(frame.outcome, CpiOutcome::Failed { .. });
+        let tail_count = badges.len() + usize::from(failed);
+        let n_children = frame.children.len();
+        for (i, child) in frame.children.iter().enumerate() {
+            let last = i == n_children - 1 && tail_count == 0;
+            self.write_frame(out, child, &child_prefix, last, depth + 1);
+        }
+        for (i, badge) in badges.iter().enumerate() {
+            let last = i == badges.len() - 1 && !failed;
+            let c = if last {
+                "\u{2514}\u{2500}\u{2500} "
+            } else {
+                "\u{251c}\u{2500}\u{2500} "
+            };
+            writeln!(out, "{child_prefix}{c}{badge}").unwrap();
+        }
+        if failed {
+            let msg = match &frame.outcome {
+                CpiOutcome::Failed { message } => self
+                    .error_leaf
+                    .as_deref()
+                    .map(str::to_string)
+                    .or_else(|| message.clone())
+                    .unwrap_or_else(|| "failed".to_string()),
+                _ => unreachable!(),
+            };
+            writeln!(out, "{child_prefix}\u{2514}\u{2500}\u{2500} Error: {msg}").unwrap();
+        }
+    }
+}
+
 impl TransactionResult {
     /// Create a new TransactionResult wrapper for a successful transaction.
     ///
@@ -401,7 +518,7 @@ impl TransactionResult {
     /// bind at chain end. Wrap in [`tap`](Self::tap) if you also want to
     /// inspect a borrowed view inside the same statement.
     pub fn print_logs(self) -> Self {
-        print!("{}", self.logs_string());
+        print!("{}", self.tree_string());
         self
     }
 
@@ -413,6 +530,100 @@ impl TransactionResult {
     /// into each log line when an alias table is attached (see
     /// [`with_aliases`](Self::with_aliases)); falls back to
     /// [`Aliases::default`] otherwise.
+
+    /// Swap the captured logs, so tree rendering is testable against a
+    /// hand-written CPI stream without deploying a program.
+    #[cfg(test)]
+    pub(crate) fn set_logs_for_test(&mut self, logs: Vec<String>) {
+        self.inner.logs = logs;
+    }
+
+    /// The run as a CPI tree: one line per frame with the program (and,
+    /// when the logs name it, instruction) label, invoke depth, outcome
+    /// mark, and per-frame compute units; transaction signers annotate the
+    /// top-level frames; a failed frame carries its resolved error as a
+    /// leaf; decoded events render as badges inside their frame; and a
+    /// legend maps every test-registered name back to its address. Falls
+    /// back to [`logs_string`](Self::logs_string) when the logs yield no
+    /// frames (a native-only transaction).
+    pub fn tree_string(&self) -> String {
+        use std::fmt::Write as _;
+        let aliases_borrow;
+        let aliases: &Aliases = match &self.aliases {
+            Some(a) => a,
+            None => {
+                aliases_borrow = Aliases::default();
+                &aliases_borrow
+            }
+        };
+        let frames = litesvm_cpi_tree::cpi_tree(&self.inner.logs);
+        if frames.is_empty() {
+            return self.logs_string();
+        }
+
+        let mut render = TreeRender {
+            aliases,
+            well_known: Aliases::default(),
+            legend: Vec::new(),
+            signer_names: Vec::new(),
+            error_leaf: self
+                .resolved_error_name()
+                .map(str::to_string)
+                .or_else(|| self.error.clone()),
+            events: &self.event_registry,
+        };
+        let signer_count = self.message.header.num_required_signatures as usize;
+        let mut signer_names = Vec::new();
+        for key in self.message.account_keys.iter().take(signer_count) {
+            signer_names.push(render.label(key));
+        }
+        render.signer_names = signer_names;
+
+        let top_title = {
+            let f = &frames[0];
+            let mut t = render.label(&f.program_id);
+            if let Some(ix) = &f.instruction_name {
+                t = format!("{t}::{ix}");
+            }
+            t
+        };
+
+        let mut out = String::new();
+        writeln!(out).unwrap();
+        let bar = "\u{2500}".repeat(60usize.saturating_sub(top_title.len() + 4));
+        writeln!(out, "\u{2500}\u{2500} {top_title} {bar}").unwrap();
+        writeln!(
+            out,
+            "Transaction  signers=[{}]",
+            render.signer_names.join(", ")
+        )
+        .unwrap();
+
+        let n = frames.len();
+        for (i, f) in frames.iter().enumerate() {
+            render.write_frame(&mut out, f, "", i == n - 1, 1);
+        }
+
+        if let Some(err) = &self.error {
+            writeln!(out, "Error: {err}").unwrap();
+        }
+        writeln!(out, "Compute Units (this run): {}", self.compute_units()).unwrap();
+        writeln!(out, "Fee: {} lamports", self.fee()).unwrap();
+        if !render.legend.is_empty() {
+            writeln!(out, "Legend ({}):", render.legend.len()).unwrap();
+            let width = render
+                .legend
+                .iter()
+                .map(|(n, _)| n.len())
+                .max()
+                .unwrap_or(0);
+            for (name, pk) in &render.legend {
+                writeln!(out, "  {name:width$} = {pk}").unwrap();
+            }
+        }
+        out
+    }
+
     pub fn logs_string(&self) -> String {
         use std::fmt::Write as _;
         let aliases_borrow;
