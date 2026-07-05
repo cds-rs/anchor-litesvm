@@ -19,8 +19,9 @@ keywords = ["solana", "anchor", "litesvm", "testing", "blockchain"]
 broken_intra_doc_links = "deny"
 
 [workspace.dependencies]
-litesvm = "0.13"
-litesvm-token = "0.13"
+# Tracks the CPI-invocation-tree branch (LiteSVM/litesvm#349, tagged `next`);
+# swap to the crates.io release that includes it when that ships.
+litesvm = { git = "https://github.com/cds-rs/litesvm", branch = "feat/evergreen" }
 anchor-lang = "1.0.0"
 solana-program = "3.0.0"
 solana-program-pack = "3.1.0"
