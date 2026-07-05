@@ -63,3 +63,73 @@ fn vault_deposit_happy_path() {
 
     common::expect_capture("vault_deposit", &result.tree_string());
 }
+
+#[test]
+fn vault_deposit_wrong_state_is_rejected() {
+    let mut ctx = boot();
+    let alice = ctx.cast_actor("Alice");
+    let mallory = ctx.cast_actor("Mallory");
+
+    // Mallory initializes her OWN vault: a real, program-owned, correctly
+    // discriminated VaultState account exists at her PDA. This is the
+    // confused-deputy setup: the substituted account is valid in every way
+    // except that its seeds derive from Mallory, not Alice.
+    ctx.tx(&[&mallory])
+        .build(
+            InitializeBundle {
+                user: mallory.pubkey(),
+            },
+            vault::client::args::Initialize {},
+        )
+        .send_ok();
+
+    // Alice initializes her own vault (the honest counterpart).
+    ctx.tx(&[&alice])
+        .build(
+            InitializeBundle {
+                user: alice.pubkey(),
+            },
+            vault::client::args::Initialize {},
+        )
+        .send_ok();
+
+    // The bundle derives every account honestly; the closure then swaps
+    // exactly the vault_state slot for Mallory's valid, initialized PDA.
+    // Anchor loads it fine (right owner, right discriminator) and reaches
+    // the seeds constraint, which derives from Alice's key and rejects the
+    // mismatch: ConstraintSeeds.
+    let (mallory_state, _) = vault_state_pda(&mallory.pubkey());
+    let honest = ctx.program().build_ix(
+        DepositBundle {
+            user: alice.pubkey(),
+        },
+        vault::client::args::Deposit {
+            amount: 1_000_000_000,
+        },
+    );
+    let ix = ctx.program().build_ix_with(
+        DepositBundle {
+            user: alice.pubkey(),
+        },
+        vault::client::args::Deposit {
+            amount: 1_000_000_000,
+        },
+        |accounts| accounts.vault_state = mallory_state,
+    );
+
+    // Prove the mechanism: exactly one account slot differs from the
+    // honest build, and it's the corrupted vault_state.
+    let diffs: Vec<usize> = honest
+        .accounts
+        .iter()
+        .zip(&ix.accounts)
+        .enumerate()
+        .filter(|(_, (a, b))| a.pubkey != b.pubkey)
+        .map(|(i, _)| i)
+        .collect();
+    assert_eq!(diffs.len(), 1, "exactly one slot corrupted");
+    assert_eq!(ix.accounts[diffs[0]].pubkey, mallory_state);
+
+    let result = ctx.send_err_named(ix, &[&alice], "ConstraintSeeds");
+    common::expect_capture("vault_wrong_state", &result.tree_string());
+}
