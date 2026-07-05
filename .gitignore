@@ -45,3 +45,5 @@ flamegraph.svg
 *.bak
 *.tmp
 *.temp
+# mdBook build output
+book/book/
