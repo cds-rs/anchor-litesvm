@@ -191,3 +191,91 @@ fn refund_before_expiry_is_rejected() {
     let result = ctx.send_err_named(ix, &[&maker], "EscrowNotExpired");
     common::expect_capture("escrow_refund_too_early", &result.tree_string());
 }
+
+#[test]
+fn take_with_wrong_vault_is_rejected() {
+    let mut ctx = boot();
+    let maker = ctx.cast_actor("Alice");
+    let taker = ctx.cast_actor("Bob");
+    let mallory = ctx.cast_actor("Mallory");
+    let mint_a = ctx.cast_mint("MintA", &maker, 6);
+    let mint_b = ctx.cast_mint("MintB", &maker, 6);
+    ctx.fund_ata(&maker, &mint_a, &maker, 1_000_000);
+    ctx.fund_ata(&taker, &mint_b, &maker, 1_000_000);
+
+    let seed = 11u64;
+    let (escrow_pda, _bump) = Pubkey::find_program_address(
+        &[b"escrow", maker.pubkey().as_ref(), &seed.to_le_bytes()],
+        &escrow::ID,
+    );
+
+    ctx.tx(&[&maker])
+        .build(
+            MakeBundle {
+                maker: maker.pubkey(),
+                mint_a,
+                mint_b,
+                token_program: TOKEN_PROGRAM,
+                escrow: escrow_pda,
+            },
+            escrow::client::args::Make {
+                seed,
+                receive: 1_000_000,
+                deposit: 1_000_000,
+            },
+        )
+        .send_ok();
+
+    // Mallory owns a real, initialized mint_a token account (the
+    // confused-deputy setup: valid in every way except its authority is
+    // Mallory, not the escrow PDA). Zero balance is fine; it only needs to
+    // exist and deserialize. `maker` is the mint authority as elsewhere.
+    let mallory_vault = ctx.fund_ata(&mallory, &mint_a, &maker, 0);
+
+    // Point vault at Mallory's ATA instead of the escrow PDA's. The bundle
+    // derives every account honestly; the closure then swaps exactly the
+    // vault slot.
+    let honest = ctx.program().build_ix(
+        TakeBundle {
+            taker: taker.pubkey(),
+            maker: maker.pubkey(),
+            mint_a,
+            mint_b,
+            token_program: TOKEN_PROGRAM,
+            escrow: escrow_pda,
+        },
+        escrow::client::args::Take {},
+    );
+    let ix = ctx.program().build_ix_with(
+        TakeBundle {
+            taker: taker.pubkey(),
+            maker: maker.pubkey(),
+            mint_a,
+            mint_b,
+            token_program: TOKEN_PROGRAM,
+            escrow: escrow_pda,
+        },
+        escrow::client::args::Take {},
+        |accounts| accounts.vault = mallory_vault,
+    );
+
+    // Prove the mechanism: exactly one account slot differs from the honest
+    // build, and it's the corrupted vault.
+    let diffs: Vec<usize> = honest
+        .accounts
+        .iter()
+        .zip(&ix.accounts)
+        .enumerate()
+        .filter(|(_, (a, b))| a.pubkey != b.pubkey)
+        .map(|(i, _)| i)
+        .collect();
+    assert_eq!(diffs.len(), 1, "exactly one slot corrupted");
+    assert_eq!(ix.accounts[diffs[0]].pubkey, mallory_vault);
+
+    // Mallory's ATA deserializes fine (real, initialized, mint_a), so Anchor
+    // reaches `vault`'s `associated_token::authority = escrow` constraint,
+    // which catches that the token owner is Mallory, not the escrow PDA:
+    // ConstraintTokenOwner.
+    let result = ctx.send_err_named(ix, &[&taker], "ConstraintTokenOwner");
+    common::expect_capture("escrow_wrong_vault", &result.tree_string());
+}
