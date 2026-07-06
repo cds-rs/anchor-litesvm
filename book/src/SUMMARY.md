@@ -10,3 +10,4 @@
 - [Example: Vault](examples/vault.md)
 - [Example: Escrow](examples/escrow.md)
 - [Example: Stake](examples/stake.md)
+- [Reference](reference.md)
