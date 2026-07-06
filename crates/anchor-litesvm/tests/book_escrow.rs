@@ -93,3 +93,101 @@ fn escrow_make_then_take() {
 
     common::expect_capture("escrow_take", &result.tree_string());
 }
+
+#[test]
+fn take_after_expiry_is_rejected() {
+    let mut ctx = boot();
+    let maker = ctx.cast_actor("Alice");
+    let taker = ctx.cast_actor("Bob");
+    let mint_a = ctx.cast_mint("MintA", &maker, 6);
+    let mint_b = ctx.cast_mint("MintB", &maker, 6);
+    ctx.fund_ata(&maker, &mint_a, &maker, 1_000_000);
+    ctx.fund_ata(&taker, &mint_b, &maker, 1_000_000);
+
+    let seed = 7u64;
+    let (escrow_pda, _bump) = Pubkey::find_program_address(
+        &[b"escrow", maker.pubkey().as_ref(), &seed.to_le_bytes()],
+        &escrow::ID,
+    );
+
+    ctx.tx(&[&maker])
+        .build(
+            MakeBundle {
+                maker: maker.pubkey(),
+                mint_a,
+                mint_b,
+                token_program: TOKEN_PROGRAM,
+                escrow: escrow_pda,
+            },
+            escrow::client::args::Make {
+                seed,
+                receive: 1_000_000,
+                deposit: 1_000_000,
+            },
+        )
+        .send_ok();
+
+    // The escrow expires 90 days after make. Jump 91 days forward.
+    ctx.svm.advance_days(91);
+
+    let ix = ctx.program().build_ix(
+        TakeBundle {
+            taker: taker.pubkey(),
+            maker: maker.pubkey(),
+            mint_a,
+            mint_b,
+            token_program: TOKEN_PROGRAM,
+            escrow: escrow_pda,
+        },
+        escrow::client::args::Take {},
+    );
+    let result = ctx.send_err_named(ix, &[&taker], "EscrowExpired");
+    common::expect_capture("escrow_expired", &result.tree_string());
+}
+
+#[test]
+fn refund_before_expiry_is_rejected() {
+    let mut ctx = boot();
+    let maker = ctx.cast_actor("Alice");
+    let mint_a = ctx.cast_mint("MintA", &maker, 6);
+    let mint_b = ctx.cast_mint("MintB", &maker, 6);
+    ctx.fund_ata(&maker, &mint_a, &maker, 1_000_000);
+
+    let seed = 9u64;
+    let (escrow_pda, _bump) = Pubkey::find_program_address(
+        &[b"escrow", maker.pubkey().as_ref(), &seed.to_le_bytes()],
+        &escrow::ID,
+    );
+
+    ctx.tx(&[&maker])
+        .build(
+            MakeBundle {
+                maker: maker.pubkey(),
+                mint_a,
+                mint_b,
+                token_program: TOKEN_PROGRAM,
+                escrow: escrow_pda,
+            },
+            escrow::client::args::Make {
+                seed,
+                receive: 1_000_000,
+                deposit: 1_000_000,
+            },
+        )
+        .send_ok();
+
+    // No time warp: still inside the 90-day window, so refund must be rejected.
+    // `refund` doesn't sign with `maker` (it's a plain `SystemAccount`), but the
+    // transaction still needs a fee-payer signer, so `maker` signs in that role.
+    let ix = ctx.program().build_ix(
+        RefundBundle {
+            maker: maker.pubkey(),
+            mint_a,
+            token_program: TOKEN_PROGRAM,
+            escrow: escrow_pda,
+        },
+        escrow::client::args::Refund {},
+    );
+    let result = ctx.send_err_named(ix, &[&maker], "EscrowNotExpired");
+    common::expect_capture("escrow_refund_too_early", &result.tree_string());
+}
