@@ -4,9 +4,9 @@
 //! `bundles_from_idl!`; instead we hand-build each `Instruction` from the
 //! vendored `#[derive(Accounts)]` structs directly.
 //!
-//! No tests live here yet: Tasks 14/15 drive these builders through actual
-//! scenarios. Until then several of these functions are unused, hence the
-//! blanket allow below rather than peppering every helper with one.
+//! The tests below drive most of these builders through actual scenarios.
+//! `ix_claim_rewards` remains uncalled for now, hence the blanket allow below
+//! rather than peppering every helper with one.
 #![allow(dead_code)]
 
 mod common;
@@ -272,8 +272,8 @@ fn stake_happy_path() {
     common::expect_capture("stake", &result.tree_string());
 }
 
-/// `unstake` reads the Clock, computes `staked_days = (now - staked_at) /
-/// SECONDS_PER_DAY`, and requires `staked_days >= freeze_period` (7, set by
+/// `unstake` reads the Clock, computes `staked_time = (now - staked_at) /
+/// SECONDS_PER_DAY`, and requires `staked_time >= freeze_period` (7, set by
 /// `initialize` above) before it will unfreeze the asset. One elapsed day is
 /// nowhere near enough, so the instruction must bail on
 /// `FreezePeriodNotElapsed` (error 6005) rather than touch the asset.

@@ -101,9 +101,9 @@ let result = ctx.send_err_named(ix, &[&alice], "ConstraintSeeds");
 ```
 
 Anchor loads Mallory's account fine (right owner, right discriminator), but
-the `✗` leaf is `ConstraintSeeds`: the seeds check on `vault_state` derives
-from Alice's key, and Mallory's account doesn't match it. This is the
-confused-deputy story: a substituted account that's valid in every way
-except who it belongs to, caught by the one constraint that checks.
+the `✗` leaf is `ConstraintSeeds`: a seeds check derived from Alice's key
+rejects the mismatch. This is the confused-deputy story: a substituted
+account that's valid in every way except who it belongs to, caught by the
+one constraint that checks.
 
 The full test is `crates/anchor-litesvm/tests/book_vault.rs`.

@@ -30,10 +30,15 @@ Alice, and the tree renders her name directly:
 
 Two things read off the alias table here. The `🔔 Deposited` badge resolves
 `user` to `Alice` instead of a 44-character base58 key. And the `Legend` at
-the bottom lists every alias this run actually touched, mapped back to its
-real address: `Alice` and the `vault` PDA. (Well-known programs like `System`
-and `Token` are aliased by default too, but only non-default entries make the
-legend; a run touching only `System` prints no legend at all.)
+the bottom lists every alias that appears in this render, mapped back to its
+real address: `Alice` and the `vault` PDA. The renderer only surfaces
+aliases it actually draws from, which is transaction signers and frame
+program ids, not every account passed in an instruction's metas; a mint or
+an ATA, or even a non-signing actor like escrow's maker, won't show up in
+the legend unless it's also a signer or a program id. (Well-known programs
+like `System` and `Token` are aliased by default too, but only non-default
+entries make the legend; a run touching only `System` prints no legend at
+all.)
 
 Casting isn't limited to signers. `cast_account` casts a passive,
 non-signing pubkey; `cast_mint` casts a token mint; `fund_ata` funds a

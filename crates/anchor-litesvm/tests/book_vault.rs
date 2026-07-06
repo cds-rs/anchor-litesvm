@@ -96,7 +96,7 @@ fn vault_deposit_wrong_state_is_rejected() {
     // The bundle derives every account honestly; the closure then swaps
     // exactly the vault_state slot for Mallory's valid, initialized PDA.
     // Anchor loads it fine (right owner, right discriminator) and reaches
-    // the seeds constraint, which derives from Alice's key and rejects the
+    // a seeds constraint derived from Alice's key, which rejects the
     // mismatch: ConstraintSeeds.
     let (mallory_state, _) = vault_state_pda(&mallory.pubkey());
     let honest = ctx.program().build_ix(
