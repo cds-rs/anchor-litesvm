@@ -12,8 +12,11 @@
 mod common;
 
 use anchor_lang::prelude::Pubkey;
+use anchor_litesvm::AnchorLiteSVM;
+use litesvm_utils::naming::deterministic_keypair;
 use sha2::{Digest, Sha256};
 use solana_instruction::{AccountMeta, Instruction};
+use solana_signer::Signer;
 
 const STAKING_ID: Pubkey = Pubkey::from_str_const("GoZYUCqeKxN2TXNcAnSm8aGfWSpqzBgSqackvDzzFAMg");
 const MPL_CORE_ID: Pubkey = Pubkey::from_str_const("CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d");
@@ -192,4 +195,78 @@ fn ix_claim_rewards(owner: &Pubkey, asset: &Pubkey, collection: &Pubkey) -> Inst
         ],
         data: disc("claim_rewards").to_vec(),
     }
+}
+
+/// Deploys both vendored programs and names the staking custom errors (no
+/// IDL for this anchor-0.31 program, so `register_program_errors` is the
+/// only way a failing leaf reads as `InvalidOwner` instead of `custom
+/// program error: 0x1770`). Codes are declaration order from 6000, per
+/// `error.rs`.
+fn boot() -> anchor_litesvm::AnchorContext {
+    let mut ctx = AnchorLiteSVM::build_with_programs(&[
+        (STAKING_ID, "staking", &common::fixture_bytes("staking")),
+        (MPL_CORE_ID, "mpl_core", &common::fixture_bytes("mpl_core")),
+    ]);
+    ctx.register_program_errors(
+        STAKING_ID,
+        &[
+            (6000, "InvalidOwner"),
+            (6001, "InvalidUpdateAuthority"),
+            (6002, "AlreadyStaked"),
+            (6003, "AssetNotStaked"),
+            (6004, "InvalidTimestamp"),
+            (6005, "FreezePeriodNotElapsed"),
+            (6006, "InvalidRewardsBps"),
+            (6007, "NothingToClaim"),
+        ],
+    );
+    ctx
+}
+
+/// Create a collection, initialize the staking config on it, mint an asset
+/// into it, then stake that asset as the admin. `stake`'s CPI tree is the
+/// deepest in the book: it invokes into `mpl_core` twice (an Attributes
+/// plugin add, then a FreezeDelegate plugin add) to record `staked` /
+/// `staked_at` and freeze the asset in place.
+#[test]
+fn stake_happy_path() {
+    let mut ctx = boot();
+    let admin = ctx.cast_actor("Alice");
+
+    // Fresh mpl-core asset keypairs, deterministic so the CPI tree snapshot
+    // (which prints pubkeys via the alias table) stays stable across runs.
+    let collection = deterministic_keypair(&STAKING_ID.to_string(), "Collection");
+    let asset = deterministic_keypair(&STAKING_ID.to_string(), "Asset");
+    ctx.alias(collection.pubkey(), "Collection");
+    ctx.alias(asset.pubkey(), "Asset");
+
+    ctx.send_ok(
+        ix_create_collection(
+            &admin.pubkey(),
+            &collection.pubkey(),
+            "Stake Collection",
+            "https://example.com/collection.json",
+        ),
+        &[&admin, &collection],
+    );
+    ctx.send_ok(
+        ix_initialize(&admin.pubkey(), &collection.pubkey(), 500, 7),
+        &[&admin],
+    );
+    ctx.send_ok(
+        ix_mint_asset(
+            &admin.pubkey(),
+            &asset.pubkey(),
+            &collection.pubkey(),
+            "Stake Asset",
+            "https://example.com/asset.json",
+        ),
+        &[&admin, &asset],
+    );
+
+    let result = ctx.send_ok(
+        ix_stake(&admin.pubkey(), &asset.pubkey(), &collection.pubkey()),
+        &[&admin],
+    );
+    common::expect_capture("stake", &result.tree_string());
 }
