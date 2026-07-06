@@ -53,6 +53,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `crates/anchor-litesvm/examples/basic_usage.rs` for a compiling example
   against a small vault program's IDL.
 
+- An mdBook (`book/`) covering the reference and tutorial ground for the
+  crate: a quickstart, the core concepts (the World, actor/alias setup,
+  structured logs), three worked examples against real deployed programs
+  (vault, escrow, stake), and a curated API reference. Every runtime code
+  block is captured output from the crate's own tests, so the book can't
+  drift from what the framework actually does. Build it with
+  `mdbook build book`.
+
 ## [anchor-litesvm 0.4.0] - 2026-04-09
 
 ### Changed
