@@ -14,6 +14,7 @@ mod common;
 use anchor_lang::prelude::Pubkey;
 use anchor_litesvm::AnchorLiteSVM;
 use litesvm_utils::naming::deterministic_keypair;
+use litesvm_utils::TestHelpers;
 use sha2::{Digest, Sha256};
 use solana_instruction::{AccountMeta, Instruction};
 use solana_signer::Signer;
@@ -269,4 +270,108 @@ fn stake_happy_path() {
         &[&admin],
     );
     common::expect_capture("stake", &result.tree_string());
+}
+
+/// `unstake` reads the Clock, computes `staked_days = (now - staked_at) /
+/// SECONDS_PER_DAY`, and requires `staked_days >= freeze_period` (7, set by
+/// `initialize` above) before it will unfreeze the asset. One elapsed day is
+/// nowhere near enough, so the instruction must bail on
+/// `FreezePeriodNotElapsed` (error 6005) rather than touch the asset.
+#[test]
+fn unstake_before_freeze_is_rejected() {
+    let mut ctx = boot();
+    let admin = ctx.cast_actor("Alice");
+
+    let collection = deterministic_keypair(&STAKING_ID.to_string(), "Collection");
+    let asset = deterministic_keypair(&STAKING_ID.to_string(), "Asset");
+    ctx.alias(collection.pubkey(), "Collection");
+    ctx.alias(asset.pubkey(), "Asset");
+
+    ctx.send_ok(
+        ix_create_collection(
+            &admin.pubkey(),
+            &collection.pubkey(),
+            "Stake Collection",
+            "https://example.com/collection.json",
+        ),
+        &[&admin, &collection],
+    );
+    ctx.send_ok(
+        ix_initialize(&admin.pubkey(), &collection.pubkey(), 500, 7),
+        &[&admin],
+    );
+    ctx.send_ok(
+        ix_mint_asset(
+            &admin.pubkey(),
+            &asset.pubkey(),
+            &collection.pubkey(),
+            "Stake Asset",
+            "https://example.com/asset.json",
+        ),
+        &[&admin, &asset],
+    );
+    ctx.send_ok(
+        ix_stake(&admin.pubkey(), &asset.pubkey(), &collection.pubkey()),
+        &[&admin],
+    );
+
+    // Only 1 of the 7 freeze-period days has elapsed.
+    ctx.svm.advance_days(1);
+    let result = ctx.send_err_named(
+        ix_unstake(&admin.pubkey(), &asset.pubkey(), &collection.pubkey()),
+        &[&admin],
+        "FreezePeriodNotElapsed",
+    );
+    common::expect_capture("stake_freeze_locked", &result.tree_string());
+}
+
+/// Same setup as `unstake_before_freeze_is_rejected`, but the clock is warped
+/// past the 7-day freeze period before `unstake` runs. The tree shows the
+/// mpl-core unfreeze / plugin-update CPIs plus the rewards `mint_to`/
+/// `mint_to_checked` token CPI that `stake_happy_path`'s tree never reaches.
+#[test]
+fn unstake_after_freeze_succeeds() {
+    let mut ctx = boot();
+    let admin = ctx.cast_actor("Alice");
+
+    let collection = deterministic_keypair(&STAKING_ID.to_string(), "Collection");
+    let asset = deterministic_keypair(&STAKING_ID.to_string(), "Asset");
+    ctx.alias(collection.pubkey(), "Collection");
+    ctx.alias(asset.pubkey(), "Asset");
+
+    ctx.send_ok(
+        ix_create_collection(
+            &admin.pubkey(),
+            &collection.pubkey(),
+            "Stake Collection",
+            "https://example.com/collection.json",
+        ),
+        &[&admin, &collection],
+    );
+    ctx.send_ok(
+        ix_initialize(&admin.pubkey(), &collection.pubkey(), 500, 7),
+        &[&admin],
+    );
+    ctx.send_ok(
+        ix_mint_asset(
+            &admin.pubkey(),
+            &asset.pubkey(),
+            &collection.pubkey(),
+            "Stake Asset",
+            "https://example.com/asset.json",
+        ),
+        &[&admin, &asset],
+    );
+    ctx.send_ok(
+        ix_stake(&admin.pubkey(), &asset.pubkey(), &collection.pubkey()),
+        &[&admin],
+    );
+
+    // 8 of the 7 freeze-period days have elapsed.
+    ctx.svm.advance_days(8);
+    let result = ctx.send_ok(
+        ix_unstake(&admin.pubkey(), &asset.pubkey(), &collection.pubkey()),
+        &[&admin],
+    );
+    common::expect_capture("stake_unstake_ok", &result.tree_string());
 }
