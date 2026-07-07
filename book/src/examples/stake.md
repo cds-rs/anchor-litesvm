@@ -37,90 +37,94 @@ through CPIs into the mpl-core program itself, so nearly everything `stake`
 and `unstake` do to the NFT shows up as a nested frame rather than as a
 direct account write in `staking`'s own frame.
 
-The program depends on `mpl-core`, which is pinned to anchor 0.31. The host
-workspace here is anchor 1.0, and that mismatch is exactly why the
-program's IDL can't feed `declare_program!` or `bundles_from_idl!` the way
-vault's and escrow's do: those macros generate code against the workspace's
-own anchor 1.0 typings, and an anchor 0.31 IDL doesn't speak that dialect.
+## The accounts
 
-So this chapter drives the program with raw `solana_instruction::Instruction`s
-instead, hand-built the same way those macros build them internally when
-they can. Think of this as the escape hatch at the whole-program level:
-where vault's and escrow's escape hatches swap a single account inside an
-otherwise-generated instruction, here nothing is generated at all, and the
-framework supports that for any program, IDL or not.
+Three PDAs hang off the collection and the config, and the asset lives inside
+mpl-core; that shape is what makes the CPI tree deep.
 
-## The raw client
+```mermaid
+flowchart TD
+    Owner["(1) Owner (staker)"]
+    Collection["(2) Collection<br/>mpl-core collection"]
+    Asset["(3) Asset<br/>mpl-core NFT"]
+    Config["(4) Config PDA<br/>seeds: config + collection<br/>rewards_bps, freeze_period"]
+    UA["(5) update_authority PDA<br/>seeds: update_authority + collection"]
+    Mint["(6) rewards_mint PDA<br/>seeds: rewards_mint + config"]
+    Ata["(7) user_rewards_ata<br/>ATA of owner + rewards_mint"]
 
-Every Anchor instruction's data starts with an 8-byte discriminator: a
-hash-derived tag identifying which instruction the rest of the bytes belong
-to, since the wire format carries no instruction name, just data.
-`bundles_from_idl!` normally computes this for you, reading it straight off
-the IDL. With no IDL here, `disc` computes it directly instead:
-
-```rust
-// crates/anchor-litesvm/tests/book_stake.rs
-/// Anchor 0.31 8-byte instruction discriminator: `sha256("global:<name>")[..8]`.
-fn disc(name: &str) -> [u8; 8] {
-    let h = Sha256::digest(format!("global:{name}").as_bytes());
-    let mut d = [0u8; 8];
-    d.copy_from_slice(&h[..8]);
-    d
-}
+    Owner -->|"stakes / unstakes"| Asset
+    Collection -->|contains| Asset
+    Collection -->|seeds| Config
+    Collection -->|seeds| UA
+    Config -->|seeds| Mint
+    UA -->|"mpl-core authority for"| Asset
+    Mint -->|"unstake mints to"| Ata
 ```
 
+The owner (1) stakes an asset (3), an mpl-core NFT that belongs to a collection
+(2). Two PDAs are seeded off that collection: config (4) holds the staking
+terms (the rewards rate and the freeze period), and update_authority (5) is a
+PDA the program controls, set as the collection's mpl-core update authority
+when `create_collection` runs. That authority is what lets `staking` sign the
+plugin adds and updates that freeze and unfreeze the asset, which is what the
+deep CPI tree below is made of. rewards_mint (6) is seeded off config, and
+`unstake` mints from it into the staker's ATA (7).
+
+`staking` depends on `mpl-core`, whose crate is pinned to anchor 0.31, so it
+builds under its own 0.31 toolchain rather than in this anchor 1.0 workspace.
+That version gap looks like it should block the typed client; it does not.
+`staking`'s IDL is spec `0.1.0`, the same format anchor 1.0 emits. The one
+snag is a name clash: the IDL embeds mpl-core's `Key` enum, which collides
+with `anchor_lang`'s `Key` trait once `declare_program!` glob-imports both,
+and current rustc rejects the ambiguous glob. `make fixtures` runs the
+framework's sanitize pass (`anchor_litesvm::sanitize_idl`) over
+`idls/staking.json`, which namespaces `Key` to `StakingKey`. With that, the
+typed client generates like vault's and escrow's, and this chapter drives
+`staking` the same way they drive their programs: a bundle and typed args per
+instruction, no hand-built bytes.
+
+## The typed client
+
+`declare_program!(staking)` generates the typed client from the sanitized
+IDL, and `bundles_from_idl!(staking)` generates an account bundle per
+instruction. So a `stake` call is a `StakeBundle` plus its (empty) args:
+
 ```rust
 // crates/anchor-litesvm/tests/book_stake.rs
-/// Mirrors `instructions/stake.rs::Stake`.
-fn ix_stake(owner: &Pubkey, asset: &Pubkey, collection: &Pubkey) -> Instruction {
-    let (config, _) = config_pda(collection);
-    let (ua, _) = update_authority_pda(collection);
-    Instruction {
-        program_id: STAKING_ID,
-        accounts: vec![
-            AccountMeta::new(*owner, true),
-            AccountMeta::new_readonly(config, false),
-            AccountMeta::new(*asset, false),
-            AccountMeta::new(*collection, false),
-            AccountMeta::new_readonly(ua, false),
-            AccountMeta::new_readonly(SYSTEM_ID, false),
-            AccountMeta::new_readonly(MPL_CORE_ID, false),
-        ],
-        data: disc("stake").to_vec(),
+anchor_lang::declare_program!(staking);
+anchor_litesvm::bundles_from_idl!(staking);
+
+fn stake_bundle(admin: &Keypair, asset: &Keypair, collection: &Keypair) -> StakeBundle {
+    StakeBundle {
+        owner: admin.pubkey(),
+        asset: asset.pubkey(),
+        collection: collection.pubkey(),
     }
 }
 ```
 
-`disc` computes that discriminator with the exact formula Anchor itself
-uses, `sha256("global:<instruction_name>")` truncated to its first 8 bytes,
-so it's the same value a generated IDL would have handed you, just computed
-instead of looked up.
-
-The account metas in `ix_stake` mirror the program's `#[derive(Accounts)]`
-struct for `Stake`, field for field, in the same order the struct declares
-them. Get that order wrong and the program reads the wrong account into the
-wrong slot: `Instruction`'s `accounts` field is just a positional list, with
-no name attached to catch a mistake the way a bundle's named struct fields
-do. Each PDA, `config` and the update-authority account `ua`, is derived by
-hand with `find_program_address`, the same derivation `bundles_from_idl!`
-would generate for you if this program's IDL could feed it.
+`StakeBundle` carries only the three accounts that vary per call: the owner
+and the two mpl-core assets. `config` and the update-authority PDA are both
+seeded off `collection`, so the bundle derives them from the IDL's seeds; you
+never spell out the account list or the discriminator, and there is no
+positional slot to get wrong.
 
 ## Two-program boot
 
 ```rust
 // crates/anchor-litesvm/tests/book_stake.rs
-/// Deploys both vendored programs and names the staking custom errors (no
-/// IDL for this anchor-0.31 program, so `register_program_errors` is the
-/// only way a failing leaf reads as `InvalidOwner` instead of `custom
-/// program error: 0x1770`). Codes are declaration order from 6000, per
-/// `error.rs`.
+/// Deploys both vendored programs and names the staking custom errors. The
+/// framework has no errors-from-IDL helper yet, so `register_program_errors`
+/// supplies the mapping (codes are declaration order from 6000, per
+/// `error.rs`); that is what makes a failing leaf read as
+/// `FreezePeriodNotElapsed` instead of `custom program error: 0x1775`.
 fn boot() -> anchor_litesvm::AnchorContext {
     let mut ctx = AnchorLiteSVM::build_with_programs(&[
-        (STAKING_ID, "staking", &common::fixture_bytes("staking")),
+        (staking::ID, "staking", &common::fixture_bytes("staking")),
         (MPL_CORE_ID, "mpl_core", &common::fixture_bytes("mpl_core")),
     ]);
     ctx.register_program_errors(
-        STAKING_ID,
+        staking::ID,
         &[
             (6000, "InvalidOwner"),
             (6001, "InvalidUpdateAuthority"),
@@ -140,10 +144,11 @@ fn boot() -> anchor_litesvm::AnchorContext {
 staking CPIs into it for every NFT operation, so both programs need to be
 live on the SVM for any of this to run.
 
-With no IDL to source error names from, `register_program_errors` supplies
-the mapping by hand, read straight off staking's own `error.rs`. That's what
-turns a failing leaf into `FreezePeriodNotElapsed` instead of the far less
-readable `custom program error: 0x1770`.
+The IDL carries staking's error names, but the framework has no helper to
+source them yet, so `register_program_errors` supplies the mapping, read
+straight off staking's own `error.rs`. That's what turns a failing leaf into
+`FreezePeriodNotElapsed` instead of the far less readable `custom program
+error: 0x1775`.
 
 ## Happy path
 
@@ -151,46 +156,21 @@ readable `custom program error: 0x1770`.
 // crates/anchor-litesvm/tests/book_stake.rs
 let mut ctx = boot();
 let admin = ctx.cast_actor("Alice");
+let (collection, asset) = setup(&mut ctx, &admin);
 
-let collection = deterministic_keypair(&STAKING_ID.to_string(), "Collection");
-let asset = deterministic_keypair(&STAKING_ID.to_string(), "Asset");
-ctx.alias(collection.pubkey(), "Collection");
-ctx.alias(asset.pubkey(), "Asset");
-
-ctx.send_ok(
-    ix_create_collection(
-        &admin.pubkey(),
-        &collection.pubkey(),
-        "Stake Collection",
-        "https://example.com/collection.json",
-    ),
-    &[&admin, &collection],
-);
-ctx.send_ok(
-    ix_initialize(&admin.pubkey(), &collection.pubkey(), 500, 7),
-    &[&admin],
-);
-ctx.send_ok(
-    ix_mint_asset(
-        &admin.pubkey(),
-        &asset.pubkey(),
-        &collection.pubkey(),
-        "Stake Asset",
-        "https://example.com/asset.json",
-    ),
-    &[&admin, &asset],
-);
-
-let result = ctx.send_ok(
-    ix_stake(&admin.pubkey(), &asset.pubkey(), &collection.pubkey()),
-    &[&admin],
-);
+let result = ctx
+    .tx(&[&admin])
+    .build(
+        stake_bundle(&admin, &asset, &collection),
+        staking::client::args::Stake {},
+    )
+    .send_ok();
 ```
 
-`create_collection` mints a fresh mpl-core collection asset: think of it as
-the container `stake` will later attach individual NFTs to. `initialize`
-opens the `config` PDA on that collection with a 500bps rewards rate and a
-7-day freeze period. `mint_asset` mints an NFT into the collection, and
+`setup` runs the first three calls through their own bundles: `create_collection`
+mints a fresh mpl-core collection asset (the container `stake` attaches NFTs
+to), `initialize` opens the `config` PDA on it with a 500bps rewards rate and
+a 7-day freeze period, and `mint_asset` mints an NFT into the collection. Then
 `stake` freezes it in place.
 
 `result.tree_string()` renders the last of those four calls, `stake`:
@@ -221,11 +201,11 @@ passed since `stake` recorded `staked_at`, and requires that count to reach
 // crates/anchor-litesvm/tests/book_stake.rs
 // Only 1 of the 7 freeze-period days has elapsed.
 ctx.svm.advance_days(1);
-let result = ctx.send_err_named(
-    ix_unstake(&admin.pubkey(), &asset.pubkey(), &collection.pubkey()),
-    &[&admin],
-    "FreezePeriodNotElapsed",
+let ix = ctx.program().build_ix(
+    unstake_bundle(&admin, &asset, &collection),
+    staking::client::args::Unstake {},
 );
+let result = ctx.send_err_named(ix, &[&admin], "FreezePeriodNotElapsed");
 ```
 
 ```text
@@ -244,10 +224,13 @@ Give `unstake` the days it's owed, and the very same call succeeds:
 // crates/anchor-litesvm/tests/book_stake.rs
 // 8 of the 7 freeze-period days have elapsed.
 ctx.svm.advance_days(8);
-let result = ctx.send_ok(
-    ix_unstake(&admin.pubkey(), &asset.pubkey(), &collection.pubkey()),
-    &[&admin],
-);
+let result = ctx
+    .tx(&[&admin])
+    .build(
+        unstake_bundle(&admin, &asset, &collection),
+        staking::client::args::Unstake {},
+    )
+    .send_ok();
 ```
 
 ```text
