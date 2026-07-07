@@ -1,215 +1,40 @@
-//! Raw-instruction client for the vendored `staking` program (Task 12,
-//! `examples/staking/`). The program is anchor 0.31 (mpl-core dependency),
-//! so its IDL can't feed the host's anchor-1.0 `declare_program!` /
-//! `bundles_from_idl!`; instead we hand-build each `Instruction` from the
-//! vendored `#[derive(Accounts)]` structs directly.
+//! Typed client for the vendored `staking` program (`examples/staking/`).
 //!
-//! The tests below drive most of these builders through actual scenarios.
-//! `ix_claim_rewards` remains uncalled for now, hence the blanket allow below
-//! rather than peppering every helper with one.
-#![allow(dead_code)]
-
+//! `staking` is anchor 0.31 (an mpl-core dependency pins it), and its IDL
+//! embeds mpl-core's `Key` enum, which collides with `anchor_lang::Key` under
+//! `declare_program!`'s glob imports. `make fixtures` runs the sanitize pass
+//! (`anchor_litesvm::sanitize_idl`) over `idls/staking.json`, namespacing `Key`
+//! to `StakingKey`, so the macros generate a typed client like any other
+//! program. Every instruction here is a bundle plus typed args; the deep
+//! mpl-core CPI tree is what the program does, not something we hand-build.
+#![allow(unexpected_cfgs)]
 mod common;
 
 use anchor_lang::prelude::Pubkey;
-use anchor_litesvm::AnchorLiteSVM;
+use anchor_lang::{self};
+use anchor_litesvm::{AnchorLiteSVM, Keypair};
 use litesvm_utils::naming::deterministic_keypair;
 use litesvm_utils::TestHelpers;
-use sha2::{Digest, Sha256};
-use solana_instruction::{AccountMeta, Instruction};
 use solana_signer::Signer;
 
-const STAKING_ID: Pubkey = Pubkey::from_str_const("GoZYUCqeKxN2TXNcAnSm8aGfWSpqzBgSqackvDzzFAMg");
+anchor_lang::declare_program!(staking);
+anchor_litesvm::bundles_from_idl!(staking);
+
 const MPL_CORE_ID: Pubkey = Pubkey::from_str_const("CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d");
-const SYSTEM_ID: Pubkey = Pubkey::from_str_const("11111111111111111111111111111111");
 const TOKEN_ID: Pubkey = Pubkey::from_str_const("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
-const ATA_ID: Pubkey = Pubkey::from_str_const("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
-/// Anchor 0.31 8-byte instruction discriminator: `sha256("global:<name>")[..8]`.
-fn disc(name: &str) -> [u8; 8] {
-    let h = Sha256::digest(format!("global:{name}").as_bytes());
-    let mut d = [0u8; 8];
-    d.copy_from_slice(&h[..8]);
-    d
-}
-
-/// Borsh-encode a `String`: 4-byte LE length prefix + UTF-8 bytes.
-fn push_str(data: &mut Vec<u8>, s: &str) {
-    data.extend_from_slice(&(s.len() as u32).to_le_bytes());
-    data.extend_from_slice(s.as_bytes());
-}
-
-// Seeds mirror `constants.rs`: SEED_CONFIG / SEED_UPDATE_AUTHORITY / SEED_REWARDS_MINT.
-fn config_pda(collection: &Pubkey) -> (Pubkey, u8) {
-    Pubkey::find_program_address(&[b"config", collection.as_ref()], &STAKING_ID)
-}
-fn update_authority_pda(collection: &Pubkey) -> (Pubkey, u8) {
-    Pubkey::find_program_address(&[b"update_authority", collection.as_ref()], &STAKING_ID)
-}
-fn rewards_mint_pda(config: &Pubkey) -> (Pubkey, u8) {
-    Pubkey::find_program_address(&[b"rewards_mint", config.as_ref()], &STAKING_ID)
-}
-fn ata(owner: &Pubkey, mint: &Pubkey) -> Pubkey {
-    Pubkey::find_program_address(&[owner.as_ref(), TOKEN_ID.as_ref(), mint.as_ref()], &ATA_ID).0
-}
-
-/// Mirrors `instructions/initialize.rs::Initialize`.
-fn ix_initialize(
-    admin: &Pubkey,
-    collection: &Pubkey,
-    rewards_bps: u16,
-    freeze_period: u16,
-) -> Instruction {
-    let (config, _) = config_pda(collection);
-    let (ua, _) = update_authority_pda(collection);
-    let (rewards_mint, _) = rewards_mint_pda(&config);
-    let mut data = disc("initialize").to_vec();
-    data.extend_from_slice(&rewards_bps.to_le_bytes());
-    data.extend_from_slice(&freeze_period.to_le_bytes());
-    Instruction {
-        program_id: STAKING_ID,
-        accounts: vec![
-            AccountMeta::new(*admin, true),
-            AccountMeta::new(config, false),
-            AccountMeta::new_readonly(*collection, false),
-            AccountMeta::new(ua, false),
-            AccountMeta::new(rewards_mint, false),
-            AccountMeta::new_readonly(SYSTEM_ID, false),
-            AccountMeta::new_readonly(TOKEN_ID, false),
-        ],
-        data,
-    }
-}
-
-/// Mirrors `instructions/create_collection.rs::CreateCollection`. `collection`
-/// is a fresh signer here (a new mpl-core collection asset), not the PDA-owned
-/// account it becomes an input to in every other instruction.
-fn ix_create_collection(payer: &Pubkey, collection: &Pubkey, name: &str, uri: &str) -> Instruction {
-    let (ua, _) = update_authority_pda(collection);
-    let mut data = disc("create_collection").to_vec();
-    push_str(&mut data, name);
-    push_str(&mut data, uri);
-    Instruction {
-        program_id: STAKING_ID,
-        accounts: vec![
-            AccountMeta::new(*payer, true),
-            AccountMeta::new(*collection, true),
-            AccountMeta::new_readonly(ua, false),
-            AccountMeta::new_readonly(SYSTEM_ID, false),
-            AccountMeta::new_readonly(MPL_CORE_ID, false),
-        ],
-        data,
-    }
-}
-
-/// Mirrors `instructions/mint_asset.rs::MintAsset`.
-fn ix_mint_asset(
-    user: &Pubkey,
-    asset: &Pubkey,
-    collection: &Pubkey,
-    name: &str,
-    uri: &str,
-) -> Instruction {
-    let (ua, _) = update_authority_pda(collection);
-    let mut data = disc("mint_asset").to_vec();
-    push_str(&mut data, name);
-    push_str(&mut data, uri);
-    Instruction {
-        program_id: STAKING_ID,
-        accounts: vec![
-            AccountMeta::new(*user, true),
-            AccountMeta::new(*asset, true),
-            AccountMeta::new(*collection, false),
-            AccountMeta::new_readonly(ua, false),
-            AccountMeta::new_readonly(SYSTEM_ID, false),
-            AccountMeta::new_readonly(MPL_CORE_ID, false),
-        ],
-        data,
-    }
-}
-
-/// Mirrors `instructions/stake.rs::Stake`.
-fn ix_stake(owner: &Pubkey, asset: &Pubkey, collection: &Pubkey) -> Instruction {
-    let (config, _) = config_pda(collection);
-    let (ua, _) = update_authority_pda(collection);
-    Instruction {
-        program_id: STAKING_ID,
-        accounts: vec![
-            AccountMeta::new(*owner, true),
-            AccountMeta::new_readonly(config, false),
-            AccountMeta::new(*asset, false),
-            AccountMeta::new(*collection, false),
-            AccountMeta::new_readonly(ua, false),
-            AccountMeta::new_readonly(SYSTEM_ID, false),
-            AccountMeta::new_readonly(MPL_CORE_ID, false),
-        ],
-        data: disc("stake").to_vec(),
-    }
-}
-
-/// Mirrors `instructions/unstake.rs::Unstake`.
-fn ix_unstake(owner: &Pubkey, asset: &Pubkey, collection: &Pubkey) -> Instruction {
-    let (config, _) = config_pda(collection);
-    let (ua, _) = update_authority_pda(collection);
-    let (rewards_mint, _) = rewards_mint_pda(&config);
-    let user_rewards_ata = ata(owner, &rewards_mint);
-    Instruction {
-        program_id: STAKING_ID,
-        accounts: vec![
-            AccountMeta::new(*owner, true),
-            AccountMeta::new_readonly(config, false),
-            AccountMeta::new(*asset, false),
-            AccountMeta::new(*collection, false),
-            AccountMeta::new_readonly(ua, false),
-            AccountMeta::new(rewards_mint, false),
-            AccountMeta::new(user_rewards_ata, false),
-            AccountMeta::new_readonly(TOKEN_ID, false),
-            AccountMeta::new_readonly(ATA_ID, false),
-            AccountMeta::new_readonly(SYSTEM_ID, false),
-            AccountMeta::new_readonly(MPL_CORE_ID, false),
-        ],
-        data: disc("unstake").to_vec(),
-    }
-}
-
-/// Mirrors `instructions/claim_rewards.rs::ClaimRewards` (identical account
-/// shape to `Unstake`).
-fn ix_claim_rewards(owner: &Pubkey, asset: &Pubkey, collection: &Pubkey) -> Instruction {
-    let (config, _) = config_pda(collection);
-    let (ua, _) = update_authority_pda(collection);
-    let (rewards_mint, _) = rewards_mint_pda(&config);
-    let user_rewards_ata = ata(owner, &rewards_mint);
-    Instruction {
-        program_id: STAKING_ID,
-        accounts: vec![
-            AccountMeta::new(*owner, true),
-            AccountMeta::new_readonly(config, false),
-            AccountMeta::new(*asset, false),
-            AccountMeta::new(*collection, false),
-            AccountMeta::new_readonly(ua, false),
-            AccountMeta::new(rewards_mint, false),
-            AccountMeta::new(user_rewards_ata, false),
-            AccountMeta::new_readonly(TOKEN_ID, false),
-            AccountMeta::new_readonly(ATA_ID, false),
-            AccountMeta::new_readonly(SYSTEM_ID, false),
-            AccountMeta::new_readonly(MPL_CORE_ID, false),
-        ],
-        data: disc("claim_rewards").to_vec(),
-    }
-}
-
-/// Deploys both vendored programs and names the staking custom errors (no
-/// IDL for this anchor-0.31 program, so `register_program_errors` is the
-/// only way a failing leaf reads as `InvalidOwner` instead of `custom
-/// program error: 0x1770`). Codes are declaration order from 6000, per
-/// `error.rs`.
+/// Deploys both vendored programs and names the staking custom errors. The
+/// framework has no errors-from-IDL helper yet, so `register_program_errors`
+/// supplies the mapping (codes are declaration order from 6000, per
+/// `error.rs`); that is what makes a failing leaf read as
+/// `FreezePeriodNotElapsed` instead of `custom program error: 0x1775`.
 fn boot() -> anchor_litesvm::AnchorContext {
     let mut ctx = AnchorLiteSVM::build_with_programs(&[
-        (STAKING_ID, "staking", &common::fixture_bytes("staking")),
+        (staking::ID, "staking", &common::fixture_bytes("staking")),
         (MPL_CORE_ID, "mpl_core", &common::fixture_bytes("mpl_core")),
     ]);
     ctx.register_program_errors(
-        STAKING_ID,
+        staking::ID,
         &[
             (6000, "InvalidOwner"),
             (6001, "InvalidUpdateAuthority"),
@@ -224,154 +49,149 @@ fn boot() -> anchor_litesvm::AnchorContext {
     ctx
 }
 
-/// Create a collection, initialize the staking config on it, mint an asset
-/// into it, then stake that asset as the admin. `stake`'s CPI tree is the
-/// deepest in the book: it invokes into `mpl_core` twice (an Attributes
-/// plugin add, then a FreezeDelegate plugin add) to record `staked` /
-/// `staked_at` and freeze the asset in place.
+/// Create a collection, initialize the staking config on it (500 bps rewards,
+/// 7-day freeze), and mint an asset into it, leaving an asset ready to stake.
+/// The asset keypairs are deterministic so the captured CPI trees (which print
+/// pubkeys through the alias table) stay stable across runs.
+fn setup(ctx: &mut anchor_litesvm::AnchorContext, admin: &Keypair) -> (Keypair, Keypair) {
+    let collection = deterministic_keypair(&staking::ID.to_string(), "Collection");
+    let asset = deterministic_keypair(&staking::ID.to_string(), "Asset");
+    ctx.alias(collection.pubkey(), "Collection");
+    ctx.alias(asset.pubkey(), "Asset");
+
+    ctx.tx(&[admin, &collection])
+        .build(
+            CreateCollectionBundle {
+                payer: admin.pubkey(),
+                collection: collection.pubkey(),
+            },
+            staking::client::args::CreateCollection {
+                name: "Stake Collection".into(),
+                uri: "https://example.com/collection.json".into(),
+            },
+        )
+        .send_ok();
+
+    ctx.tx(&[admin])
+        .build(
+            InitializeBundle {
+                admin: admin.pubkey(),
+                collection: collection.pubkey(),
+                token_program: TOKEN_ID,
+            },
+            staking::client::args::Initialize {
+                rewards_bps: 500,
+                freeze_period: 7,
+            },
+        )
+        .send_ok();
+
+    ctx.tx(&[admin, &asset])
+        .build(
+            MintAssetBundle {
+                user: admin.pubkey(),
+                asset: asset.pubkey(),
+                collection: collection.pubkey(),
+            },
+            staking::client::args::MintAsset {
+                name: "Stake Asset".into(),
+                uri: "https://example.com/asset.json".into(),
+            },
+        )
+        .send_ok();
+
+    (collection, asset)
+}
+
+fn stake_bundle(admin: &Keypair, asset: &Keypair, collection: &Keypair) -> StakeBundle {
+    StakeBundle {
+        owner: admin.pubkey(),
+        asset: asset.pubkey(),
+        collection: collection.pubkey(),
+    }
+}
+
+fn unstake_bundle(admin: &Keypair, asset: &Keypair, collection: &Keypair) -> UnstakeBundle {
+    UnstakeBundle {
+        owner: admin.pubkey(),
+        asset: asset.pubkey(),
+        collection: collection.pubkey(),
+        token_program: TOKEN_ID,
+    }
+}
+
+/// Stake an asset as the admin. `stake`'s CPI tree is the deepest in the book:
+/// it invokes into `mpl_core` twice (an Attributes plugin add, then a
+/// FreezeDelegate plugin add) to record `staked` / `staked_at` and freeze the
+/// asset in place. The bundle derives `config` and `update_authority` from the
+/// IDL's seeds; only the owner and the two mpl-core assets vary per call.
 #[test]
 fn stake_happy_path() {
     let mut ctx = boot();
     let admin = ctx.cast_actor("Alice");
+    let (collection, asset) = setup(&mut ctx, &admin);
 
-    // Fresh mpl-core asset keypairs, deterministic so the CPI tree snapshot
-    // (which prints pubkeys via the alias table) stays stable across runs.
-    let collection = deterministic_keypair(&STAKING_ID.to_string(), "Collection");
-    let asset = deterministic_keypair(&STAKING_ID.to_string(), "Asset");
-    ctx.alias(collection.pubkey(), "Collection");
-    ctx.alias(asset.pubkey(), "Asset");
-
-    ctx.send_ok(
-        ix_create_collection(
-            &admin.pubkey(),
-            &collection.pubkey(),
-            "Stake Collection",
-            "https://example.com/collection.json",
-        ),
-        &[&admin, &collection],
-    );
-    ctx.send_ok(
-        ix_initialize(&admin.pubkey(), &collection.pubkey(), 500, 7),
-        &[&admin],
-    );
-    ctx.send_ok(
-        ix_mint_asset(
-            &admin.pubkey(),
-            &asset.pubkey(),
-            &collection.pubkey(),
-            "Stake Asset",
-            "https://example.com/asset.json",
-        ),
-        &[&admin, &asset],
-    );
-
-    let result = ctx.send_ok(
-        ix_stake(&admin.pubkey(), &asset.pubkey(), &collection.pubkey()),
-        &[&admin],
-    );
+    let result = ctx
+        .tx(&[&admin])
+        .build(
+            stake_bundle(&admin, &asset, &collection),
+            staking::client::args::Stake {},
+        )
+        .send_ok();
     common::expect_capture("stake", &result.tree_string());
 }
 
 /// `unstake` reads the Clock, computes `staked_time = (now - staked_at) /
-/// SECONDS_PER_DAY`, and requires `staked_time >= freeze_period` (7, set by
-/// `initialize` above) before it will unfreeze the asset. One elapsed day is
-/// nowhere near enough, so the instruction must bail on
-/// `FreezePeriodNotElapsed` (error 6005) rather than touch the asset.
+/// SECONDS_PER_DAY`, and requires `staked_time >= freeze_period` (7, set in
+/// `setup`) before it will unfreeze the asset. One elapsed day is nowhere near
+/// enough, so the instruction must bail on `FreezePeriodNotElapsed` (6005)
+/// rather than touch the asset.
 #[test]
 fn unstake_before_freeze_is_rejected() {
     let mut ctx = boot();
     let admin = ctx.cast_actor("Alice");
-
-    let collection = deterministic_keypair(&STAKING_ID.to_string(), "Collection");
-    let asset = deterministic_keypair(&STAKING_ID.to_string(), "Asset");
-    ctx.alias(collection.pubkey(), "Collection");
-    ctx.alias(asset.pubkey(), "Asset");
-
-    ctx.send_ok(
-        ix_create_collection(
-            &admin.pubkey(),
-            &collection.pubkey(),
-            "Stake Collection",
-            "https://example.com/collection.json",
-        ),
-        &[&admin, &collection],
-    );
-    ctx.send_ok(
-        ix_initialize(&admin.pubkey(), &collection.pubkey(), 500, 7),
-        &[&admin],
-    );
-    ctx.send_ok(
-        ix_mint_asset(
-            &admin.pubkey(),
-            &asset.pubkey(),
-            &collection.pubkey(),
-            "Stake Asset",
-            "https://example.com/asset.json",
-        ),
-        &[&admin, &asset],
-    );
-    ctx.send_ok(
-        ix_stake(&admin.pubkey(), &asset.pubkey(), &collection.pubkey()),
-        &[&admin],
-    );
+    let (collection, asset) = setup(&mut ctx, &admin);
+    ctx.tx(&[&admin])
+        .build(
+            stake_bundle(&admin, &asset, &collection),
+            staking::client::args::Stake {},
+        )
+        .send_ok();
 
     // Only 1 of the 7 freeze-period days has elapsed.
     ctx.svm.advance_days(1);
-    let result = ctx.send_err_named(
-        ix_unstake(&admin.pubkey(), &asset.pubkey(), &collection.pubkey()),
-        &[&admin],
-        "FreezePeriodNotElapsed",
+    let ix = ctx.program().build_ix(
+        unstake_bundle(&admin, &asset, &collection),
+        staking::client::args::Unstake {},
     );
+    let result = ctx.send_err_named(ix, &[&admin], "FreezePeriodNotElapsed");
     common::expect_capture("stake_freeze_locked", &result.tree_string());
 }
 
-/// Same setup as `unstake_before_freeze_is_rejected`, but the clock is warped
-/// past the 7-day freeze period before `unstake` runs. The tree shows the
-/// mpl-core unfreeze / plugin-update CPIs plus the rewards `mint_to`/
-/// `mint_to_checked` token CPI that `stake_happy_path`'s tree never reaches.
+/// Same setup, but the clock is warped past the 7-day freeze period before
+/// `unstake` runs. The tree shows the mpl-core unfreeze / plugin-update CPIs
+/// plus the rewards `mint_to` token CPI that `stake_happy_path`'s tree never
+/// reaches.
 #[test]
 fn unstake_after_freeze_succeeds() {
     let mut ctx = boot();
     let admin = ctx.cast_actor("Alice");
-
-    let collection = deterministic_keypair(&STAKING_ID.to_string(), "Collection");
-    let asset = deterministic_keypair(&STAKING_ID.to_string(), "Asset");
-    ctx.alias(collection.pubkey(), "Collection");
-    ctx.alias(asset.pubkey(), "Asset");
-
-    ctx.send_ok(
-        ix_create_collection(
-            &admin.pubkey(),
-            &collection.pubkey(),
-            "Stake Collection",
-            "https://example.com/collection.json",
-        ),
-        &[&admin, &collection],
-    );
-    ctx.send_ok(
-        ix_initialize(&admin.pubkey(), &collection.pubkey(), 500, 7),
-        &[&admin],
-    );
-    ctx.send_ok(
-        ix_mint_asset(
-            &admin.pubkey(),
-            &asset.pubkey(),
-            &collection.pubkey(),
-            "Stake Asset",
-            "https://example.com/asset.json",
-        ),
-        &[&admin, &asset],
-    );
-    ctx.send_ok(
-        ix_stake(&admin.pubkey(), &asset.pubkey(), &collection.pubkey()),
-        &[&admin],
-    );
+    let (collection, asset) = setup(&mut ctx, &admin);
+    ctx.tx(&[&admin])
+        .build(
+            stake_bundle(&admin, &asset, &collection),
+            staking::client::args::Stake {},
+        )
+        .send_ok();
 
     // 8 of the 7 freeze-period days have elapsed.
     ctx.svm.advance_days(8);
-    let result = ctx.send_ok(
-        ix_unstake(&admin.pubkey(), &asset.pubkey(), &collection.pubkey()),
-        &[&admin],
-    );
+    let result = ctx
+        .tx(&[&admin])
+        .build(
+            unstake_bundle(&admin, &asset, &collection),
+            staking::client::args::Unstake {},
+        )
+        .send_ok();
     common::expect_capture("stake_unstake_ok", &result.tree_string());
 }
