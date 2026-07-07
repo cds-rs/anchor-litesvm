@@ -40,3 +40,4 @@ precompiles = ["litesvm-utils/precompiles"]
 
 [dev-dependencies]
 solana-system-interface = { workspace = true }
+solana-instruction = "3.2.0"
