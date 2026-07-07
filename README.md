@@ -135,6 +135,9 @@ fn test_my_program() {
 
 ## Documentation
 
+- **[The book](book/)** - Quickstart, concepts, and worked examples (vault,
+  escrow, stake) against real deployed programs, plus a curated API
+  reference; build it locally with `mdbook build book`
 - **[anchor-litesvm README](crates/anchor-litesvm/README.md)** - Anchor-specific features
 - **[litesvm-utils README](crates/litesvm-utils/README.md)** - Framework-agnostic utilities
 - **[basic_usage example](crates/anchor-litesvm/examples/basic_usage.rs)** - Runnable end-to-end walkthrough
