@@ -29,6 +29,10 @@ fixtures:
 	cp examples/staking/target/deploy/staking.so crates/anchor-litesvm/tests/fixtures/staking.so
 	cp examples/vault/target/idl/vault.json      crates/anchor-litesvm/idls/vault.json
 	cp examples/escrow/target/idl/escrow.json    crates/anchor-litesvm/idls/escrow.json
+	# staking's IDL embeds mpl-core's `Key`, which collides with anchor_lang::Key
+	# under declare_program!'s glob; the sanitize pass namespaces it so the typed
+	# client (tests/stake_typed.rs) can ingest it.
+	cargo run -q -p anchor-litesvm --bin sanitize_idl -- examples/staking/target/idl/staking.json crates/anchor-litesvm/idls/staking.json
 	BLESS=1 cargo test -p anchor-litesvm --tests
 
 # Golden guard: fails if any committed snapshot drifts from current output.
