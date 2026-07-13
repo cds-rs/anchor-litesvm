@@ -20,20 +20,24 @@ keywords = ["solana", "anchor", "litesvm", "testing", "blockchain"]
 broken_intra_doc_links = "deny"
 
 [workspace.dependencies]
-# Tracks the CPI-invocation-tree branch (LiteSVM/litesvm#349, tagged `next`);
-# swap to the crates.io release that includes it when that ships.
-litesvm = { git = "https://github.com/cds-rs/litesvm", branch = "feat/evergreen" }
-litesvm-cpi-tree = { git = "https://github.com/cds-rs/litesvm", branch = "feat/evergreen" }
+# The CPI-invocation-tree work landed upstream (LiteSVM/litesvm#349) and shipped
+# in 0.14.0, so both crates come from crates.io. 0.14.0 rides the solana-4.x
+# runtime crates (transaction, message, account, hash below); those are owned
+# solely by anchor-litesvm-compat, so the whole workspace resolves one version of
+# each and anchor stays on its shared 3.x on-chain crates (instruction, keypair,
+# signer, signature).
+litesvm = "0.14.0"
+litesvm-cpi-tree = "0.14.0"
 anchor-lang = "1.0.0"
 solana-program = "3.0.0"
 solana-program-pack = "3.1.0"
 solana-keypair = "3.1.2"
 solana-signer = "3.0.0"
-solana-transaction = { version = "3.0.1", features = ["bincode"] }
-solana-message = "3.1"
-solana-account = "3.4"
-solana-hash = "3.1.0"
-solana-signature = "3.3.0"
+solana-transaction = "4.1.5"
+solana-message = "4.2.4"
+solana-account = "4.3.0"
+solana-hash = "4.3.0"
+solana-signature = "3.4.1"
 borsh = "1.5.3"
 sha2 = "0.10.8"
 thiserror = "2.0.18"

@@ -722,12 +722,12 @@ mod tests {
 
     #[test]
     fn test_get_current_slot() {
-        let svm = LiteSVM::new();
+        let mut svm = LiteSVM::new();
 
-        let slot = svm.get_current_slot();
-
-        // Initial slot should be 0
-        assert_eq!(slot, 0);
+        // Read back a slot set independently of the engine's (version-varying)
+        // default, so this exercises the read path rather than restating it.
+        svm.warp_to_slot(12_345);
+        assert_eq!(svm.get_current_slot(), 12_345);
     }
 
     #[test]
@@ -746,15 +746,16 @@ mod tests {
     #[test]
     fn test_advance_slot_multiple_times() {
         let mut svm = LiteSVM::new();
+        let start = svm.get_current_slot();
 
         svm.advance_slot(10);
-        assert_eq!(svm.get_current_slot(), 10);
+        assert_eq!(svm.get_current_slot(), start + 10);
 
         svm.advance_slot(25);
-        assert_eq!(svm.get_current_slot(), 35);
+        assert_eq!(svm.get_current_slot(), start + 35);
 
         svm.advance_slot(5);
-        assert_eq!(svm.get_current_slot(), 40);
+        assert_eq!(svm.get_current_slot(), start + 40);
     }
 
     #[test]
