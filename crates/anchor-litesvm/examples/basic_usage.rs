@@ -15,8 +15,7 @@ use anchor_lang::prelude::Pubkey;
 // bound by an actual `use` in this module, not the extern-prelude fallback.
 #[allow(clippy::single_component_path_imports)]
 use anchor_lang;
-use anchor_litesvm::AnchorContext;
-use litesvm::LiteSVM;
+use anchor_litesvm::{AnchorContext, LiteSVM};
 
 // 1. Generate `vault::client::{accounts, args}` from the committed IDL...
 anchor_lang::declare_program!(vault);

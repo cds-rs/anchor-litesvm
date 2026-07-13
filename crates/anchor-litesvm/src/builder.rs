@@ -4,10 +4,9 @@
 //! extending the base LiteSVM builder functionality.
 
 use crate::AnchorContext;
+use anchor_litesvm_compat::{Keypair, Signer};
 use litesvm_utils::LiteSVMBuilder;
-use solana_keypair::Keypair;
 use solana_program::pubkey::Pubkey;
-use solana_signer::Signer;
 
 /// Builder for creating an [`AnchorContext`] with programs pre-deployed.
 ///
@@ -221,7 +220,7 @@ pub trait ProgramTestExt {
     /// # Example
     /// ```no_run
     /// # use anchor_litesvm::{AnchorContext, ProgramTestExt};
-    /// # use litesvm::LiteSVM;
+    /// # use anchor_litesvm::LiteSVM;
     /// # use solana_program::pubkey::Pubkey;
     /// # let svm = LiteSVM::new();
     /// # let program_id = Pubkey::new_unique();

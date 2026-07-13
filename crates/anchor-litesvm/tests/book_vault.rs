@@ -11,8 +11,7 @@ mod common;
 // generated modules reach `anchor_lang` via `super::`, so it must be nameable
 // here (without it, the expansion fails with "no `anchor_lang` in the root").
 use anchor_lang::{self};
-use anchor_litesvm::{AnchorLiteSVM, EventHelpers};
-use solana_signer::Signer;
+use anchor_litesvm::{AnchorLiteSVM, EventHelpers, Signer};
 
 anchor_lang::declare_program!(vault);
 anchor_litesvm::bundles_from_idl!(vault);

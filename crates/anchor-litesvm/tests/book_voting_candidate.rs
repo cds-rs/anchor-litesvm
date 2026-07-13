@@ -4,8 +4,7 @@
 mod common;
 
 use anchor_lang::{self};
-use anchor_litesvm::{get_anchor_account, AnchorLiteSVM};
-use solana_signer::Signer;
+use anchor_litesvm::{get_anchor_account, AnchorLiteSVM, Signer};
 
 anchor_lang::declare_program!(voting_candidate);
 anchor_litesvm::bundles_from_idl!(voting_candidate);

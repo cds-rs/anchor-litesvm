@@ -1,18 +1,13 @@
 use crate::account::AccountError;
 use crate::program::Program;
 use anchor_lang::AccountDeserialize;
-use litesvm::LiteSVM;
+use anchor_litesvm_compat::{Hash, Keypair, LiteSVM, Signature, Signer, Transaction};
 use litesvm_utils::naming::{
     deterministic_keypair, Aliases, ErrorNames, EventRegistry, InstructionNames,
 };
 use litesvm_utils::{InstructionInfo, TestHelpers, TransactionHelpers, TransactionResult};
-use solana_hash::Hash;
-use solana_keypair::Keypair;
 use solana_program::instruction::Instruction;
 use solana_program::pubkey::Pubkey;
-use solana_signature::Signature;
-use solana_signer::Signer;
-use solana_transaction::Transaction;
 
 /// Production-compatible testing context for Anchor programs.
 ///
@@ -64,7 +59,7 @@ impl AnchorContext {
     ///
     /// # Example
     /// ```no_run
-    /// use litesvm::LiteSVM;
+    /// use anchor_litesvm::LiteSVM;
     /// use anchor_litesvm::AnchorContext;
     /// use solana_program::pubkey::Pubkey;
     ///
@@ -686,7 +681,7 @@ impl AnchorContext {
     /// # Example
     /// ```no_run
     /// # use anchor_litesvm::AnchorContext;
-    /// # use litesvm::LiteSVM;
+    /// # use anchor_litesvm::LiteSVM;
     /// # use solana_program::pubkey::Pubkey;
     /// # use anchor_lang::AccountDeserialize;
     /// # let svm = LiteSVM::new();

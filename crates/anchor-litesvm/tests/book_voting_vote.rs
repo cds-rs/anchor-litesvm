@@ -5,9 +5,8 @@
 mod common;
 
 use anchor_lang::{self};
-use anchor_litesvm::{get_anchor_account, AnchorLiteSVM};
+use anchor_litesvm::{get_anchor_account, AnchorLiteSVM, Keypair, Signer};
 use litesvm_utils::TestHelpers;
-use solana_signer::Signer;
 
 anchor_lang::declare_program!(voting_vote);
 anchor_litesvm::bundles_from_idl!(voting_vote);
@@ -15,20 +14,11 @@ anchor_litesvm::bundles_from_idl!(voting_vote);
 const POLL_ID: u64 = 1;
 
 fn boot(stage_so: &str) -> anchor_litesvm::AnchorContext {
-    AnchorLiteSVM::build_with_program(
-        voting_vote::ID,
-        "voting",
-        &common::fixture_bytes(stage_so),
-    )
+    AnchorLiteSVM::build_with_program(voting_vote::ID, "voting", &common::fixture_bytes(stage_so))
 }
 
 /// Create the poll and a "Cat" candidate as Alice, with the given window.
-fn setup_poll(
-    ctx: &mut anchor_litesvm::AnchorContext,
-    alice: &solana_keypair::Keypair,
-    start: u64,
-    end: u64,
-) {
+fn setup_poll(ctx: &mut anchor_litesvm::AnchorContext, alice: &Keypair, start: u64, end: u64) {
     let poll_account = common::voting::poll_pda(&voting_vote::ID, POLL_ID);
     ctx.tx(&[alice])
         .build(
@@ -61,7 +51,7 @@ fn setup_poll(
         .send_ok();
 }
 
-fn vote_bundle(voter: &solana_keypair::Keypair, candidate: &str) -> VoteBundle {
+fn vote_bundle(voter: &Keypair, candidate: &str) -> VoteBundle {
     VoteBundle {
         signer: voter.pubkey(),
         poll_account: common::voting::poll_pda(&voting_vote::ID, POLL_ID),
@@ -72,7 +62,7 @@ fn vote_bundle(voter: &solana_keypair::Keypair, candidate: &str) -> VoteBundle {
 
 fn cast_vote_ix(
     ctx: &anchor_litesvm::AnchorContext,
-    voter: &solana_keypair::Keypair,
+    voter: &Keypair,
 ) -> solana_program::instruction::Instruction {
     ctx.program().build_ix(
         vote_bundle(voter, "Cat"),

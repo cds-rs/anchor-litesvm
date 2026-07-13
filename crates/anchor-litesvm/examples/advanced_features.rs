@@ -1,6 +1,5 @@
-use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, TestHelpers};
+use anchor_litesvm::{AnchorLiteSVM, AssertionHelpers, Signer, TestHelpers};
 use solana_program::pubkey::Pubkey;
-use solana_signer::Signer;
 
 fn main() {
     println!("anchor-litesvm advanced_features");

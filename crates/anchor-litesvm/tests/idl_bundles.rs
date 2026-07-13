@@ -65,9 +65,7 @@ fn injected_programs_lists_system_program() {
 
 #[test]
 fn generated_bundles_ride_the_tx_builder() {
-    use anchor_litesvm::AnchorContext;
-    use litesvm::LiteSVM;
-    use solana_keypair::Keypair;
+    use anchor_litesvm::{AnchorContext, Keypair, LiteSVM};
 
     // Build-only: the emitted no-op `Resolvable` is what lets a generated
     // bundle satisfy `Tx::build`'s bound; no program deploy needed to
@@ -86,8 +84,7 @@ fn generated_bundles_ride_the_tx_builder() {
 
 #[test]
 fn build_ix_with_corrupts_exactly_one_derived_account() {
-    use anchor_litesvm::AnchorContext;
-    use litesvm::LiteSVM;
+    use anchor_litesvm::{AnchorContext, LiteSVM};
 
     // The negative-path escape hatch: the bundle derives every account
     // honestly, then the closure swaps exactly the one under attack, with

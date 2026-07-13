@@ -43,8 +43,8 @@
 
 use crate::buildable::BuildableIx;
 use crate::context::AnchorContext;
+use anchor_litesvm_compat::Keypair;
 use litesvm_utils::TransactionResult;
-use solana_keypair::Keypair;
 use solana_program::instruction::{AccountMeta, Instruction};
 
 /// Fluent transaction builder; see the [module docs](crate::tx).
@@ -181,7 +181,7 @@ mod tests {
     use super::*;
     use crate::buildable::BuildableIx;
     use anchor_lang::{prelude::*, InstructionData, ToAccountMetas};
-    use solana_keypair::Keypair;
+    use anchor_litesvm_compat::Keypair;
     use solana_program::instruction::AccountMeta;
     use solana_program::pubkey::Pubkey;
 
@@ -224,7 +224,7 @@ mod tests {
     }
 
     fn fresh_ctx() -> AnchorContext {
-        AnchorContext::new(litesvm::LiteSVM::new(), Pubkey::new_unique())
+        AnchorContext::new(anchor_litesvm_compat::LiteSVM::new(), Pubkey::new_unique())
     }
 
     #[test]
