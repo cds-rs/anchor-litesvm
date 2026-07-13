@@ -365,6 +365,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "anchor-litesvm-compat"
+version = "0.4.0"
+dependencies = [
+ "litesvm",
+ "litesvm-cpi-tree",
+ "solana-account",
+ "solana-hash 3.1.0",
+ "solana-keypair",
+ "solana-message",
+ "solana-signature",
+ "solana-signer",
+ "solana-transaction",
+]
+
+[[package]]
 name = "anchor-litesvm-derive"
 version = "0.4.0"
 dependencies = [
