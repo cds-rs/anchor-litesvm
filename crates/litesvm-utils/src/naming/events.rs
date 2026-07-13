@@ -32,7 +32,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use solana_pubkey::Pubkey;
+use solana_program::pubkey::Pubkey;
 
 /// A decoded event: its resolved name and its fields as `(name, value)` pairs.
 ///

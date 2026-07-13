@@ -29,11 +29,8 @@
 //! it, which is what keeps the transfer helper program-agnostic.
 
 use crate::tokens::TOKEN_2022_ID;
-use litesvm::LiteSVM;
-use solana_keypair::Keypair;
+use anchor_litesvm_compat::{Keypair, LiteSVM, Signer, Transaction};
 use solana_program::{instruction::Instruction, pubkey::Pubkey};
-use solana_signer::Signer;
-use solana_transaction::Transaction;
 use std::error::Error;
 
 use spl_associated_token_account::{

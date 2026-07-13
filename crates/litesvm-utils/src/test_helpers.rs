@@ -3,11 +3,8 @@
 //! This module provides convenient methods for creating and managing test accounts,
 //! token mints, and associated token accounts.
 
-use litesvm::LiteSVM;
-use solana_keypair::Keypair;
+use anchor_litesvm_compat::{Keypair, LiteSVM, Signer, Transaction};
 use solana_program::pubkey::Pubkey;
-use solana_signer::Signer;
-use solana_transaction::Transaction;
 use spl_associated_token_account::get_associated_token_address;
 use std::error::Error;
 
@@ -18,7 +15,7 @@ pub trait TestHelpers {
     /// # Example
     /// ```no_run
     /// # use litesvm_utils::TestHelpers;
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # let mut svm = LiteSVM::new();
     /// let account = svm.create_funded_account(1_000_000_000).unwrap();
     /// ```
@@ -29,7 +26,7 @@ pub trait TestHelpers {
     /// # Example
     /// ```no_run
     /// # use litesvm_utils::TestHelpers;
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # let mut svm = LiteSVM::new();
     /// let accounts = svm.create_funded_accounts(3, 1_000_000_000).unwrap();
     /// assert_eq!(accounts.len(), 3);
@@ -45,8 +42,8 @@ pub trait TestHelpers {
     /// # Example
     /// ```no_run
     /// # use litesvm_utils::TestHelpers;
-    /// # use litesvm::LiteSVM;
-    /// # use solana_keypair::Keypair;
+    /// # use litesvm_utils::LiteSVM;
+    /// # use litesvm_utils::Keypair;
     /// # let mut svm = LiteSVM::new();
     /// # let authority = Keypair::new();
     /// let mint = svm.create_token_mint(&authority, 9).unwrap();
@@ -69,8 +66,8 @@ pub trait TestHelpers {
     /// # Example
     /// ```no_run
     /// # use litesvm_utils::{TestHelpers, naming::deterministic_keypair};
-    /// # use litesvm::LiteSVM;
-    /// # use solana_keypair::Keypair;
+    /// # use litesvm_utils::LiteSVM;
+    /// # use litesvm_utils::Keypair;
     /// # let mut svm = LiteSVM::new();
     /// # let authority = Keypair::new();
     /// let mint_kp = deterministic_keypair("myapp/v1", "mint:x");
@@ -88,9 +85,9 @@ pub trait TestHelpers {
     /// # Example
     /// ```no_run
     /// # use litesvm_utils::TestHelpers;
-    /// # use litesvm::LiteSVM;
-    /// # use solana_keypair::Keypair;
-    /// # use solana_signer::Signer;
+    /// # use litesvm_utils::LiteSVM;
+    /// # use litesvm_utils::Keypair;
+    /// # use litesvm_utils::Signer;
     /// # let mut svm = LiteSVM::new();
     /// # let owner = Keypair::new();
     /// # let mint = Keypair::new();
@@ -107,9 +104,9 @@ pub trait TestHelpers {
     /// # Example
     /// ```no_run
     /// # use litesvm_utils::TestHelpers;
-    /// # use litesvm::LiteSVM;
-    /// # use solana_keypair::Keypair;
-    /// # use solana_signer::Signer;
+    /// # use litesvm_utils::LiteSVM;
+    /// # use litesvm_utils::Keypair;
+    /// # use litesvm_utils::Signer;
     /// # let mut svm = LiteSVM::new();
     /// # let owner = Keypair::new();
     /// # let mint = Keypair::new();
@@ -126,9 +123,9 @@ pub trait TestHelpers {
     /// # Example
     /// ```no_run
     /// # use litesvm_utils::TestHelpers;
-    /// # use litesvm::LiteSVM;
-    /// # use solana_keypair::Keypair;
-    /// # use solana_signer::Signer;
+    /// # use litesvm_utils::LiteSVM;
+    /// # use litesvm_utils::Keypair;
+    /// # use litesvm_utils::Signer;
     /// # use solana_program::pubkey::Pubkey;
     /// # let mut svm = LiteSVM::new();
     /// # let mint = Keypair::new();
@@ -155,7 +152,7 @@ pub trait TestHelpers {
     /// # Example
     /// ```no_run
     /// # use litesvm_utils::TestHelpers;
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # use solana_program::pubkey::Pubkey;
     /// # let svm = LiteSVM::new();
     /// # let ata = Pubkey::new_unique();
@@ -168,7 +165,7 @@ pub trait TestHelpers {
     /// # Example
     /// ```no_run
     /// # use litesvm_utils::TestHelpers;
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # use solana_program::pubkey::Pubkey;
     /// # let svm = LiteSVM::new();
     /// # let program_id = Pubkey::new_unique();
@@ -184,10 +181,10 @@ pub trait TestHelpers {
     /// # Example
     /// ```no_run
     /// # use litesvm_utils::TestHelpers;
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # use solana_program::pubkey::Pubkey;
-    /// # use solana_keypair::Keypair;
-    /// # use solana_signer::Signer;
+    /// # use litesvm_utils::Keypair;
+    /// # use litesvm_utils::Signer;
     /// # let svm = LiteSVM::new();
     /// # let program_id = Pubkey::new_unique();
     /// # let maker = Keypair::new();
@@ -208,7 +205,7 @@ pub trait TestHelpers {
     /// # Example
     /// ```no_run
     /// # use litesvm_utils::TestHelpers;
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # use solana_program::pubkey::Pubkey;
     /// # let svm = LiteSVM::new();
     /// # let program_id = Pubkey::new_unique();
@@ -229,7 +226,7 @@ pub trait TestHelpers {
     /// # Example
     /// ```no_run
     /// # use litesvm_utils::TestHelpers;
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # let svm = LiteSVM::new();
     /// let now = svm.get_unix_timestamp();
     /// ```
@@ -244,7 +241,7 @@ pub trait TestHelpers {
     /// # Example
     /// ```no_run
     /// # use litesvm_utils::TestHelpers;
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # let mut svm = LiteSVM::new();
     /// svm.warp_to_timestamp(1_700_000_000);
     /// ```
@@ -256,7 +253,7 @@ pub trait TestHelpers {
     /// # Example
     /// ```no_run
     /// # use litesvm_utils::TestHelpers;
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # let mut svm = LiteSVM::new();
     /// svm.advance_seconds(3_600); // jump forward one hour
     /// ```
@@ -269,7 +266,7 @@ pub trait TestHelpers {
     /// # Example
     /// ```no_run
     /// # use litesvm_utils::TestHelpers;
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # let mut svm = LiteSVM::new();
     /// svm.advance_days(30); // jump forward 30 days
     /// ```
@@ -495,8 +492,8 @@ impl TestHelpers for LiteSVM {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anchor_litesvm_compat::Signer;
     use solana_program_pack::Pack;
-    use solana_signer::Signer;
 
     #[test]
     fn test_create_funded_account() {

@@ -4,14 +4,9 @@
 //! and handling their results in tests.
 
 use crate::naming::{Aliases, ErrorNames, EventRegistry, InstructionNames};
-use litesvm::types::TransactionMetadata;
-use litesvm::LiteSVM;
-use solana_keypair::Keypair;
-use solana_message::Message;
+use anchor_litesvm_compat::{Keypair, LiteSVM, Message, Signer, Transaction, TransactionMetadata};
 use solana_program::instruction::Instruction;
 use solana_program::pubkey::Pubkey;
-use solana_signer::Signer;
-use solana_transaction::Transaction;
 use std::fmt;
 use thiserror::Error;
 
@@ -36,9 +31,9 @@ pub enum TransactionError {
 ///
 /// ```no_run
 /// # use litesvm_utils::TransactionHelpers;
-/// # use litesvm::LiteSVM;
+/// # use litesvm_utils::LiteSVM;
 /// # use solana_program::instruction::Instruction;
-/// # use solana_keypair::Keypair;
+/// # use litesvm_utils::Keypair;
 /// # let mut svm = LiteSVM::new();
 /// # let ix = Instruction::new_with_bytes(solana_program::pubkey::Pubkey::new_unique(), &[], vec![]);
 /// # let signer = Keypair::new();
@@ -166,12 +161,12 @@ impl TreeRender<'_> {
     fn write_frame(
         &mut self,
         out: &mut String,
-        frame: &litesvm_cpi_tree::CpiFrame,
+        frame: &anchor_litesvm_compat::CpiFrame,
         prefix: &str,
         is_last: bool,
         depth: usize,
     ) {
-        use litesvm_cpi_tree::{CpiOutcome, FrameLog};
+        use anchor_litesvm_compat::{CpiOutcome, FrameLog};
         use std::fmt::Write as _;
 
         let connector = if is_last {
@@ -358,9 +353,9 @@ impl TransactionResult {
     ///
     /// ```no_run
     /// # use litesvm_utils::TransactionHelpers;
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # use solana_program::instruction::Instruction;
-    /// # use solana_keypair::Keypair;
+    /// # use litesvm_utils::Keypair;
     /// # let mut svm = LiteSVM::new();
     /// # let ix = Instruction::new_with_bytes(solana_program::pubkey::Pubkey::new_unique(), &[], vec![]);
     /// # let payer = Keypair::new();
@@ -389,9 +384,9 @@ impl TransactionResult {
     ///
     /// ```no_run
     /// # use litesvm_utils::{Aliases, TransactionHelpers};
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # use solana_program::instruction::Instruction;
-    /// # use solana_keypair::Keypair;
+    /// # use litesvm_utils::Keypair;
     /// # let mut svm = LiteSVM::new();
     /// # let ix = Instruction::new_with_bytes(solana_program::pubkey::Pubkey::new_unique(), &[], vec![]);
     /// # let payer = Keypair::new();
@@ -572,7 +567,7 @@ impl TransactionResult {
                 &aliases_borrow
             }
         };
-        let frames = litesvm_cpi_tree::cpi_tree(&self.inner.logs);
+        let frames = anchor_litesvm_compat::cpi_tree(&self.inner.logs);
         if frames.is_empty() {
             return self.logs_string();
         }
@@ -703,9 +698,9 @@ impl TransactionResult {
     ///
     /// ```no_run
     /// # use litesvm_utils::{Aliases, TransactionHelpers};
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # use solana_program::instruction::Instruction;
-    /// # use solana_keypair::Keypair;
+    /// # use litesvm_utils::Keypair;
     /// # let mut svm = LiteSVM::new();
     /// # let ix = Instruction::new_with_bytes(solana_program::pubkey::Pubkey::new_unique(), &[], vec![]);
     /// # let payer = Keypair::new();
@@ -730,9 +725,9 @@ impl TransactionResult {
     ///
     /// ```no_run
     /// # use litesvm_utils::TransactionHelpers;
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # use solana_program::instruction::Instruction;
-    /// # use solana_keypair::Keypair;
+    /// # use litesvm_utils::Keypair;
     /// # let mut svm = LiteSVM::new();
     /// # let ix = Instruction::new_with_bytes(solana_program::pubkey::Pubkey::new_unique(), &[], vec![]);
     /// # let payer = Keypair::new();
@@ -759,9 +754,9 @@ impl TransactionResult {
     ///
     /// ```no_run
     /// # use litesvm_utils::TransactionHelpers;
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # use solana_program::instruction::Instruction;
-    /// # use solana_keypair::Keypair;
+    /// # use litesvm_utils::Keypair;
     /// # let mut svm = LiteSVM::new();
     /// # let ix = Instruction::new_with_bytes(solana_program::pubkey::Pubkey::new_unique(), &[], vec![]);
     /// # let payer = Keypair::new();
@@ -846,9 +841,9 @@ impl TransactionResult {
     ///
     /// ```no_run
     /// # use litesvm_utils::TransactionHelpers;
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # use solana_program::instruction::Instruction;
-    /// # use solana_keypair::Keypair;
+    /// # use litesvm_utils::Keypair;
     /// # let mut svm = LiteSVM::new();
     /// # let ix = Instruction::new_with_bytes(solana_program::pubkey::Pubkey::new_unique(), &[], vec![]);
     /// # let payer = Keypair::new();
@@ -883,9 +878,9 @@ pub trait TransactionHelpers {
     /// # Example
     /// ```no_run
     /// # use litesvm_utils::TransactionHelpers;
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # use solana_program::instruction::Instruction;
-    /// # use solana_keypair::Keypair;
+    /// # use litesvm_utils::Keypair;
     /// # let mut svm = LiteSVM::new();
     /// # let ix = Instruction::new_with_bytes(solana_program::pubkey::Pubkey::new_unique(), &[], vec![]);
     /// # let signer = Keypair::new();
@@ -902,9 +897,9 @@ pub trait TransactionHelpers {
     /// # Example
     /// ```no_run
     /// # use litesvm_utils::TransactionHelpers;
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # use solana_program::instruction::Instruction;
-    /// # use solana_keypair::Keypair;
+    /// # use litesvm_utils::Keypair;
     /// # let mut svm = LiteSVM::new();
     /// # let ix1 = Instruction::new_with_bytes(solana_program::pubkey::Pubkey::new_unique(), &[], vec![]);
     /// # let ix2 = Instruction::new_with_bytes(solana_program::pubkey::Pubkey::new_unique(), &[], vec![]);
@@ -922,11 +917,11 @@ pub trait TransactionHelpers {
     /// # Example
     /// ```no_run
     /// # use litesvm_utils::TransactionHelpers;
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # use solana_program::instruction::Instruction;
-    /// # use solana_keypair::Keypair;
-    /// # use solana_signer::Signer;
-    /// # use solana_transaction::Transaction;
+    /// # use litesvm_utils::Keypair;
+    /// # use litesvm_utils::Signer;
+    /// # use litesvm_utils::Transaction;
     /// # let mut svm = LiteSVM::new();
     /// # let ix = Instruction::new_with_bytes(solana_program::pubkey::Pubkey::new_unique(), &[], vec![]);
     /// # let signer = Keypair::new();
@@ -965,9 +960,9 @@ pub trait TransactionHelpers {
     ///
     /// ```no_run
     /// # use litesvm_utils::{Aliases, TransactionHelpers};
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # use solana_program::instruction::Instruction;
-    /// # use solana_keypair::Keypair;
+    /// # use litesvm_utils::Keypair;
     /// # let mut svm = LiteSVM::new();
     /// # let ix = Instruction::new_with_bytes(solana_program::pubkey::Pubkey::new_unique(), &[], vec![]);
     /// # let maker = Keypair::new();
@@ -1012,9 +1007,9 @@ pub trait TransactionHelpers {
     ///
     /// ```no_run
     /// # use litesvm_utils::{Aliases, TransactionHelpers};
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # use solana_program::instruction::Instruction;
-    /// # use solana_keypair::Keypair;
+    /// # use litesvm_utils::Keypair;
     /// # let mut svm = LiteSVM::new();
     /// # let ix = Instruction::new_with_bytes(solana_program::pubkey::Pubkey::new_unique(), &[], vec![]);
     /// # let attacker = Keypair::new();
@@ -1059,9 +1054,9 @@ pub trait TransactionHelpers {
     ///
     /// ```no_run
     /// # use litesvm_utils::{Aliases, TransactionHelpers};
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # use solana_program::instruction::Instruction;
-    /// # use solana_keypair::Keypair;
+    /// # use litesvm_utils::Keypair;
     /// # let mut svm = LiteSVM::new();
     /// # let ix = Instruction::new_with_bytes(solana_program::pubkey::Pubkey::new_unique(), &[], vec![]);
     /// # let taker = Keypair::new();

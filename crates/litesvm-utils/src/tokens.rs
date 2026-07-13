@@ -14,8 +14,7 @@
 //! `spl-token-2022`, which resolves clean against our solana-program); the base
 //! path here needs only the program id.
 
-use litesvm::LiteSVM;
-use solana_account::Account;
+use anchor_litesvm_compat::{Account, LiteSVM};
 use solana_program::program_option::COption;
 use solana_program::program_pack::Pack;
 use solana_program::pubkey::Pubkey;

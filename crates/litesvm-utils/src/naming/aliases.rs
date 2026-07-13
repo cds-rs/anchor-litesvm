@@ -6,7 +6,7 @@
 //! wins).
 
 use {
-    solana_pubkey::Pubkey,
+    solana_program::pubkey::Pubkey,
     std::{collections::HashMap, str::FromStr},
 };
 

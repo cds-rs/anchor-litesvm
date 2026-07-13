@@ -14,7 +14,7 @@
 //!     since the label *is* the seed) becomes an immediate panic, with an escape
 //!     hatch for legitimately re-fetching an existing identity.
 
-use solana_keypair::Keypair;
+use anchor_litesvm_compat::Keypair;
 use std::collections::HashSet;
 
 /// Derive a deterministic ed25519 keypair from a `(domain, role)` pair.
@@ -170,7 +170,7 @@ impl ActorRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_signer::Signer;
+    use anchor_litesvm_compat::Signer;
 
     #[test]
     fn same_role_same_key_across_calls() {

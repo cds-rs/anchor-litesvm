@@ -3,7 +3,7 @@
 //! This module provides a fluent API for setting up test environments
 //! with automatic program deployment and configuration.
 
-use litesvm::LiteSVM;
+use anchor_litesvm_compat::LiteSVM;
 use solana_program::pubkey::Pubkey;
 
 /// Builder for creating a LiteSVM instance with programs pre-deployed
@@ -151,7 +151,7 @@ pub trait ProgramTestExt {
     /// # Example
     /// ```no_run
     /// # use litesvm_utils::ProgramTestExt;
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # use solana_program::pubkey::Pubkey;
     /// # let mut svm = LiteSVM::new();
     /// # let program_id = Pubkey::new_unique();

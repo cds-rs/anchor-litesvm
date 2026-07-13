@@ -15,8 +15,7 @@
 //! the rest are written as `None` so any reader gets a valid value rather than
 //! running off the end.
 
-use litesvm::LiteSVM;
-use solana_account::Account;
+use anchor_litesvm_compat::{Account, LiteSVM};
 use solana_program::pubkey::Pubkey;
 
 /// The Metaplex Token Metadata program id.
