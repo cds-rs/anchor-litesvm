@@ -12,9 +12,8 @@ mod common;
 // here (without it, the expansion fails with "no `anchor_lang` in the root").
 use anchor_lang::prelude::Pubkey;
 use anchor_lang::{self};
-use anchor_litesvm::AnchorLiteSVM;
+use anchor_litesvm::{AnchorLiteSVM, Signer};
 use litesvm_utils::TestHelpers;
-use solana_signer::Signer;
 
 anchor_lang::declare_program!(escrow);
 anchor_litesvm::bundles_from_idl!(escrow);

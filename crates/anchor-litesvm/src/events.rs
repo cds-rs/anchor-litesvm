@@ -271,7 +271,8 @@ mod tests {
     fn register_event_decodes_a_real_anchor_event_by_name_and_fields() {
         // `Event::data()` returns exactly what `emit!` logs (discriminator ++
         // borsh body).
-        let mut ctx = crate::AnchorContext::new(litesvm::LiteSVM::new(), Pubkey::new_unique());
+        let mut ctx =
+            crate::AnchorContext::new(anchor_litesvm_compat::LiteSVM::new(), Pubkey::new_unique());
         ctx.register_event::<Moved>();
 
         // `decode_bytes` takes the wire bytes (disc ++ borsh); the base64 framing

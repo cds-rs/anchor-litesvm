@@ -15,15 +15,9 @@ workspace = true
 [dependencies]
 litesvm-utils = { version = "0.4.0", path = "../litesvm-utils" }
 anchor-litesvm-derive = { version = "0.4.0", path = "../anchor-litesvm-derive" }
-litesvm = { workspace = true }
+anchor-litesvm-compat = { version = "0.4.0", path = "../anchor-litesvm-compat" }
 anchor-lang = { workspace = true }
 solana-program = { workspace = true }
-solana-account = "3.4.0"
-solana-hash = "3.1.0"
-solana-keypair = "3.1.2"
-solana-signature = "3.3.0"
-solana-signer = "3.0.0"
-solana-transaction = { version = "3.0.1", features = ["bincode"] }
 spl-token = { workspace = true }
 spl-associated-token-account = { workspace = true }
 borsh = { workspace = true }

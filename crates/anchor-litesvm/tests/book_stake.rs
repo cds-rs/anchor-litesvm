@@ -12,10 +12,9 @@ mod common;
 
 use anchor_lang::prelude::Pubkey;
 use anchor_lang::{self};
-use anchor_litesvm::{AnchorLiteSVM, Keypair};
+use anchor_litesvm::{AnchorLiteSVM, Keypair, Signer};
 use litesvm_utils::naming::deterministic_keypair;
 use litesvm_utils::TestHelpers;
-use solana_signer::Signer;
 
 anchor_lang::declare_program!(staking);
 anchor_litesvm::bundles_from_idl!(staking);
