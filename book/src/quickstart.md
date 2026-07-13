@@ -44,8 +44,7 @@ just `user`).
 #![allow(unexpected_cfgs)]
 
 use anchor_lang::{self};
-use anchor_litesvm::AnchorLiteSVM;
-use solana_signer::Signer;
+use anchor_litesvm::{AnchorLiteSVM, Signer};
 
 anchor_lang::declare_program!(vault);
 anchor_litesvm::bundles_from_idl!(vault);
