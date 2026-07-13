@@ -222,7 +222,7 @@ pub use litesvm_utils::{
 
 // Re-export commonly used external types
 pub use anchor_lang::{AccountDeserialize, AnchorSerialize};
-pub use anchor_litesvm_compat::{Keypair, LiteSVM, Signer};
+pub use anchor_litesvm_compat::{Keypair, LiteSVM, Signer, TransactionMetadata};
 pub use solana_program::instruction::{AccountMeta, Instruction};
 pub use solana_program::pubkey::Pubkey;
 

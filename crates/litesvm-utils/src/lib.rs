@@ -190,5 +190,5 @@ pub use transaction::{InstructionInfo, TransactionError, TransactionHelpers, Tra
 
 // Re-export commonly used external types. Runtime-seam types come through the
 // compat boundary; Pubkey stays on solana_program (the anchor-pinned side).
-pub use anchor_litesvm_compat::{Keypair, LiteSVM, Signer, Transaction};
+pub use anchor_litesvm_compat::{Keypair, LiteSVM, Signer, Transaction, TransactionMetadata};
 pub use solana_program::pubkey::Pubkey;
