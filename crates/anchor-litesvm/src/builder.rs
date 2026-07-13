@@ -61,6 +61,16 @@ impl AnchorLiteSVM {
         self
     }
 
+    /// Pin the world's starting slot, overriding the engine's default.
+    ///
+    /// Forwards to [`LiteSVMBuilder::start_slot`]; the pin is applied before the
+    /// programs deploy so they stay visible at the chosen slot. Use it for tests
+    /// whose determinism should not ride litesvm's version-varying default slot.
+    pub fn start_slot(mut self, slot: u64) -> Self {
+        self.svm_builder = self.svm_builder.start_slot(slot);
+        self
+    }
+
     /// Add a program to be deployed, registering its `name` as a pubkey
     /// alias so a failing send's printed logs name it instead of its raw id.
     ///
