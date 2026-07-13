@@ -3,7 +3,7 @@
 //! This module provides convenient assertion methods for verifying
 //! account states in tests.
 
-use litesvm::LiteSVM;
+use anchor_litesvm_compat::LiteSVM;
 use solana_program::pubkey::Pubkey;
 use solana_program_pack::Pack;
 
@@ -14,7 +14,7 @@ pub trait AssertionHelpers {
     /// # Example
     /// ```no_run
     /// # use litesvm_utils::AssertionHelpers;
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # use solana_program::pubkey::Pubkey;
     /// # let svm = LiteSVM::new();
     /// # let account = Pubkey::new_unique();
@@ -27,7 +27,7 @@ pub trait AssertionHelpers {
     /// # Example
     /// ```no_run
     /// # use litesvm_utils::AssertionHelpers;
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # use solana_program::pubkey::Pubkey;
     /// # let svm = LiteSVM::new();
     /// # let account = Pubkey::new_unique();
@@ -40,7 +40,7 @@ pub trait AssertionHelpers {
     /// # Example
     /// ```no_run
     /// # use litesvm_utils::AssertionHelpers;
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # use solana_program::pubkey::Pubkey;
     /// # let svm = LiteSVM::new();
     /// # let token_account = Pubkey::new_unique();
@@ -53,7 +53,7 @@ pub trait AssertionHelpers {
     /// # Example
     /// ```no_run
     /// # use litesvm_utils::AssertionHelpers;
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # use solana_program::pubkey::Pubkey;
     /// # let svm = LiteSVM::new();
     /// # let account = Pubkey::new_unique();
@@ -66,7 +66,7 @@ pub trait AssertionHelpers {
     /// # Example
     /// ```no_run
     /// # use litesvm_utils::AssertionHelpers;
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # use solana_program::pubkey::Pubkey;
     /// # let svm = LiteSVM::new();
     /// # let mint = Pubkey::new_unique();
@@ -79,7 +79,7 @@ pub trait AssertionHelpers {
     /// # Example
     /// ```no_run
     /// # use litesvm_utils::AssertionHelpers;
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # use solana_program::pubkey::Pubkey;
     /// # let svm = LiteSVM::new();
     /// # let account = Pubkey::new_unique();
@@ -93,7 +93,7 @@ pub trait AssertionHelpers {
     /// # Example
     /// ```no_run
     /// # use litesvm_utils::AssertionHelpers;
-    /// # use litesvm::LiteSVM;
+    /// # use litesvm_utils::LiteSVM;
     /// # use solana_program::pubkey::Pubkey;
     /// # let svm = LiteSVM::new();
     /// # let account = Pubkey::new_unique();
@@ -197,7 +197,7 @@ impl AssertionHelpers for LiteSVM {
 mod tests {
     use super::*;
     use crate::test_helpers::TestHelpers;
-    use solana_signer::Signer;
+    use anchor_litesvm_compat::Signer;
 
     #[test]
     fn test_assert_account_closed_nonexistent() {

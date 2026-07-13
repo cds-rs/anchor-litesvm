@@ -188,8 +188,7 @@ pub use token_hooks::TransferHookTesting;
 pub use tokens::{TokenFabrication, TokenProgram, TOKEN_2022_ID};
 pub use transaction::{InstructionInfo, TransactionError, TransactionHelpers, TransactionResult};
 
-// Re-export commonly used external types
-pub use litesvm::LiteSVM;
-pub use solana_keypair::Keypair;
+// Re-export commonly used external types. Runtime-seam types come through the
+// compat boundary; Pubkey stays on solana_program (the anchor-pinned side).
+pub use anchor_litesvm_compat::{Keypair, LiteSVM, Signer, Transaction};
 pub use solana_program::pubkey::Pubkey;
-pub use solana_signer::Signer;

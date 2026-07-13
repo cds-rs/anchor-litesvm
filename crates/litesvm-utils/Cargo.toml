@@ -13,16 +13,9 @@ keywords = ["solana", "litesvm", "testing", "blockchain", "utilities"]
 workspace = true
 
 [dependencies]
-litesvm = { workspace = true }
-litesvm-cpi-tree = { workspace = true }
+anchor-litesvm-compat = { version = "0.4.0", path = "../anchor-litesvm-compat" }
 solana-program = { workspace = true }
 solana-program-pack = { workspace = true }
-solana-message = { workspace = true }
-solana-keypair = { workspace = true }
-solana-pubkey = { workspace = true }
-solana-signer = { workspace = true }
-solana-transaction = { workspace = true }
-solana-account = { workspace = true }
 spl-token = { workspace = true }
 spl-associated-token-account = { workspace = true }
 solana-system-interface = { workspace = true }
@@ -42,7 +35,7 @@ base64 = { workspace = true }
 # engine: `LiteSVM::new()` self-enables them under this flag. A passthrough
 # to litesvm's feature, so a suite that verifies signatures never names
 # litesvm directly.
-precompiles = ["litesvm/precompiles"]
+precompiles = ["anchor-litesvm-compat/precompiles"]
 
 [dev-dependencies]
 proptest = "1.5"

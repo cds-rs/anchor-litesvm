@@ -1829,19 +1829,12 @@ dependencies = [
 name = "litesvm-utils"
 version = "0.4.0"
 dependencies = [
+ "anchor-litesvm-compat",
  "base64 0.22.1",
- "litesvm",
- "litesvm-cpi-tree",
  "proptest",
- "solana-account",
- "solana-keypair",
- "solana-message",
  "solana-program",
  "solana-program-pack",
- "solana-pubkey 3.0.0",
- "solana-signer",
  "solana-system-interface 2.0.0",
- "solana-transaction",
  "spl-associated-token-account",
  "spl-tlv-account-resolution",
  "spl-token",

@@ -30,7 +30,7 @@
 //! registered prefixes match (a `[0]` and a longer `[0, 1]`, say), the longest
 //! one wins, so a coarse catch-all never shadows a specific entry.
 
-use solana_pubkey::Pubkey;
+use solana_program::pubkey::Pubkey;
 use std::collections::HashMap;
 
 /// A per-program table of `discriminator-prefix -> instruction name`. Attach it

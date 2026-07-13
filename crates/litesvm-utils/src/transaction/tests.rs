@@ -480,9 +480,9 @@ fn identical_sends_are_fresh_by_default() {
     // instruction resent in a loop. send_instruction refreshes the blockhash
     // before signing, so no send collides with its predecessor's signature
     // and nobody performs the expire_blockhash ritual. (cds-rs issue #4)
-    use solana_signer::Signer;
-    let mut svm = litesvm::LiteSVM::new();
-    let payer = solana_keypair::Keypair::new();
+    use anchor_litesvm_compat::Signer;
+    let mut svm = anchor_litesvm_compat::LiteSVM::new();
+    let payer = anchor_litesvm_compat::Keypair::new();
     svm.airdrop(&payer.pubkey(), 10_000_000_000).unwrap();
     let dest = solana_program::pubkey::Pubkey::new_unique();
     for i in 0..3 {

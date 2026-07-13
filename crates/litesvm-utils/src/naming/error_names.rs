@@ -23,7 +23,7 @@
 //! that already emits its own error name keeps matching on that; the registry
 //! is an additional match source for programs that emit only the code.
 
-use solana_pubkey::Pubkey;
+use solana_program::pubkey::Pubkey;
 use std::collections::HashMap;
 
 /// A per-program table of `custom-error-code -> name`. Attach it to a
