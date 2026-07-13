@@ -28,7 +28,7 @@ anchor-litesvm = "0.4"
 ```rust
 use anchor_litesvm::AnchorLiteSVM;
 use litesvm_utils::{AssertionHelpers, TestHelpers};
-use solana_signer::Signer;
+use anchor_litesvm::Signer;
 
 // 1. Generate `my_program::client::{accounts, args}` from the IDL...
 anchor_lang::declare_program!(my_program);
