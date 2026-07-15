@@ -1,106 +1,32 @@
 {
-  "accounts": [
-    {
-      "discriminator": [
-        1
-      ],
-      "name": "BaseAssetV1"
-    },
-    {
-      "discriminator": [
-        5
-      ],
-      "name": "BaseCollectionV1"
-    },
-    {
-      "discriminator": [
-        155,
-        12,
-        170,
-        224,
-        30,
-        250,
-        204,
-        130
-      ],
-      "name": "Config"
-    }
-  ],
   "address": "GoZYUCqeKxN2TXNcAnSm8aGfWSpqzBgSqackvDzzFAMg",
-  "constants": [
-    {
-      "name": "SECONDS_PER_DAY",
-      "type": "i64",
-      "value": "86400"
-    },
-    {
-      "name": "SEED_CONFIG",
-      "type": "bytes",
-      "value": "[99, 111, 110, 102, 105, 103]"
-    },
-    {
-      "name": "SEED_REWARDS_MINT",
-      "type": "bytes",
-      "value": "[114, 101, 119, 97, 114, 100, 115, 95, 109, 105, 110, 116]"
-    },
-    {
-      "name": "SEED_UPDATE_AUTHORITY",
-      "type": "bytes",
-      "value": "[117, 112, 100, 97, 116, 101, 95, 97, 117, 116, 104, 111, 114, 105, 116, 121]"
-    }
-  ],
-  "errors": [
-    {
-      "code": 6000,
-      "msg": "Invalid asset owner",
-      "name": "InvalidOwner"
-    },
-    {
-      "code": 6001,
-      "msg": "Invalid update authority",
-      "name": "InvalidUpdateAuthority"
-    },
-    {
-      "code": 6002,
-      "msg": "Asset already staked",
-      "name": "AlreadyStaked"
-    },
-    {
-      "code": 6003,
-      "msg": "Asset not staked",
-      "name": "AssetNotStaked"
-    },
-    {
-      "code": 6004,
-      "msg": "Invalid timestamp",
-      "name": "InvalidTimestamp"
-    },
-    {
-      "code": 6005,
-      "msg": "Freeze period not elapsed",
-      "name": "FreezePeriodNotElapsed"
-    },
-    {
-      "code": 6006,
-      "msg": "Invalid rewards bps",
-      "name": "InvalidRewardsBps"
-    },
-    {
-      "code": 6007,
-      "msg": "Nothing to claim",
-      "name": "NothingToClaim"
-    }
-  ],
+  "metadata": {
+    "name": "staking",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
   "instructions": [
     {
+      "name": "claim_rewards",
+      "discriminator": [
+        4,
+        144,
+        132,
+        71,
+        116,
+        23,
+        151,
+        80
+      ],
       "accounts": [
         {
           "name": "owner",
+          "writable": true,
+          "signer": true,
           "relations": [
             "asset"
-          ],
-          "signer": true,
-          "writable": true
+          ]
         },
         {
           "name": "config",
@@ -133,10 +59,10 @@
           "writable": true
         },
         {
+          "name": "update_authority",
           "docs": [
             "the collection's update authority"
           ],
-          "name": "update_authority",
           "pda": {
             "seeds": [
               {
@@ -172,6 +98,7 @@
         },
         {
           "name": "rewards_mint",
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -196,49 +123,12 @@
                 "path": "config"
               }
             ]
-          },
-          "writable": true
+          }
         },
         {
           "name": "user_rewards_ata",
+          "writable": true,
           "pda": {
-            "program": {
-              "kind": "const",
-              "value": [
-                140,
-                151,
-                37,
-                143,
-                78,
-                36,
-                137,
-                241,
-                187,
-                61,
-                16,
-                41,
-                20,
-                142,
-                13,
-                131,
-                11,
-                90,
-                19,
-                153,
-                218,
-                255,
-                16,
-                132,
-                4,
-                142,
-                123,
-                216,
-                219,
-                233,
-                248,
-                89
-              ]
-            },
             "seeds": [
               {
                 "kind": "account",
@@ -285,56 +175,92 @@
                 "kind": "account",
                 "path": "rewards_mint"
               }
-            ]
-          },
-          "writable": true
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
         },
         {
           "name": "token_program"
         },
         {
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
-          "name": "associated_token_program"
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         },
         {
-          "address": "11111111111111111111111111111111",
-          "name": "system_program"
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         },
         {
-          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d",
-          "name": "mpl_core_program"
+          "name": "mpl_core_program",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
         }
       ],
-      "args": [],
-      "discriminator": [
-        4,
-        144,
-        132,
-        71,
-        116,
-        23,
-        151,
-        80
-      ],
-      "name": "claim_rewards"
+      "args": []
     },
     {
+      "name": "create_collection",
+      "discriminator": [
+        156,
+        251,
+        92,
+        54,
+        233,
+        2,
+        16,
+        82
+      ],
       "accounts": [
         {
           "name": "payer",
-          "signer": true,
-          "writable": true
+          "writable": true,
+          "signer": true
         },
         {
           "name": "collection",
-          "signer": true,
-          "writable": true
+          "writable": true,
+          "signer": true
         },
         {
+          "name": "update_authority",
           "docs": [
             "we verify it derives from the correct seed"
           ],
-          "name": "update_authority",
           "pda": {
             "seeds": [
               {
@@ -366,12 +292,12 @@
           }
         },
         {
-          "address": "11111111111111111111111111111111",
-          "name": "system_program"
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         },
         {
-          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d",
-          "name": "mpl_core_program"
+          "name": "mpl_core_program",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
         }
       ],
       "args": [
@@ -383,28 +309,29 @@
           "name": "uri",
           "type": "string"
         }
-      ],
-      "discriminator": [
-        156,
-        251,
-        92,
-        54,
-        233,
-        2,
-        16,
-        82
-      ],
-      "name": "create_collection"
+      ]
     },
     {
+      "name": "initialize",
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
       "accounts": [
         {
           "name": "admin",
-          "signer": true,
-          "writable": true
+          "writable": true,
+          "signer": true
         },
         {
           "name": "config",
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -423,17 +350,17 @@
                 "path": "collection"
               }
             ]
-          },
-          "writable": true
+          }
         },
         {
           "name": "collection"
         },
         {
+          "name": "update_authority",
           "docs": [
             "purposes only"
           ],
-          "name": "update_authority",
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -465,11 +392,11 @@
           },
           "relations": [
             "collection"
-          ],
-          "writable": true
+          ]
         },
         {
           "name": "rewards_mint",
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -494,12 +421,11 @@
                 "path": "config"
               }
             ]
-          },
-          "writable": true
+          }
         },
         {
-          "address": "11111111111111111111111111111111",
-          "name": "system_program"
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         },
         {
           "name": "token_program"
@@ -514,30 +440,30 @@
           "name": "freeze_period",
           "type": "u16"
         }
-      ],
-      "discriminator": [
-        175,
-        175,
-        109,
-        31,
-        13,
-        152,
-        155,
-        237
-      ],
-      "name": "initialize"
+      ]
     },
     {
+      "name": "mint_asset",
+      "discriminator": [
+        84,
+        175,
+        211,
+        156,
+        56,
+        250,
+        104,
+        118
+      ],
       "accounts": [
         {
           "name": "user",
-          "signer": true,
-          "writable": true
+          "writable": true,
+          "signer": true
         },
         {
           "name": "asset",
-          "signer": true,
-          "writable": true
+          "writable": true,
+          "signer": true
         },
         {
           "name": "collection",
@@ -576,12 +502,12 @@
           }
         },
         {
-          "address": "11111111111111111111111111111111",
-          "name": "system_program"
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         },
         {
-          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d",
-          "name": "mpl_core_program"
+          "name": "mpl_core_program",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
         }
       ],
       "args": [
@@ -593,28 +519,28 @@
           "name": "uri",
           "type": "string"
         }
-      ],
-      "discriminator": [
-        84,
-        175,
-        211,
-        156,
-        56,
-        250,
-        104,
-        118
-      ],
-      "name": "mint_asset"
+      ]
     },
     {
+      "name": "stake",
+      "discriminator": [
+        206,
+        176,
+        202,
+        18,
+        200,
+        209,
+        179,
+        108
+      ],
       "accounts": [
         {
           "name": "owner",
+          "writable": true,
+          "signer": true,
           "relations": [
             "asset"
-          ],
-          "signer": true,
-          "writable": true
+          ]
         },
         {
           "name": "config",
@@ -682,36 +608,36 @@
           ]
         },
         {
-          "address": "11111111111111111111111111111111",
-          "name": "system_program"
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         },
         {
-          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d",
-          "name": "mpl_core_program"
+          "name": "mpl_core_program",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
         }
       ],
-      "args": [],
-      "discriminator": [
-        206,
-        176,
-        202,
-        18,
-        200,
-        209,
-        179,
-        108
-      ],
-      "name": "stake"
+      "args": []
     },
     {
+      "name": "unstake",
+      "discriminator": [
+        90,
+        95,
+        107,
+        42,
+        205,
+        124,
+        50,
+        225
+      ],
       "accounts": [
         {
           "name": "owner",
+          "writable": true,
+          "signer": true,
           "relations": [
             "asset"
-          ],
-          "signer": true,
-          "writable": true
+          ]
         },
         {
           "name": "config",
@@ -780,6 +706,7 @@
         },
         {
           "name": "rewards_mint",
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -804,49 +731,12 @@
                 "path": "config"
               }
             ]
-          },
-          "writable": true
+          }
         },
         {
           "name": "user_rewards_ata",
+          "writable": true,
           "pda": {
-            "program": {
-              "kind": "const",
-              "value": [
-                140,
-                151,
-                37,
-                143,
-                78,
-                36,
-                137,
-                241,
-                187,
-                61,
-                16,
-                41,
-                20,
-                142,
-                13,
-                131,
-                11,
-                90,
-                19,
-                153,
-                218,
-                255,
-                16,
-                132,
-                4,
-                142,
-                123,
-                216,
-                219,
-                233,
-                248,
-                89
-              ]
-            },
             "seeds": [
               {
                 "kind": "account",
@@ -893,56 +783,145 @@
                 "kind": "account",
                 "path": "rewards_mint"
               }
-            ]
-          },
-          "writable": true
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
         },
         {
           "name": "token_program"
         },
         {
-          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
-          "name": "associated_token_program"
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
         },
         {
-          "address": "11111111111111111111111111111111",
-          "name": "system_program"
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         },
         {
-          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d",
-          "name": "mpl_core_program"
+          "name": "mpl_core_program",
+          "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d"
         }
       ],
-      "args": [],
-      "discriminator": [
-        90,
-        95,
-        107,
-        42,
-        205,
-        124,
-        50,
-        225
-      ],
-      "name": "unstake"
+      "args": []
     }
   ],
-  "metadata": {
-    "description": "Created with Anchor",
-    "name": "staking",
-    "spec": "0.1.0",
-    "version": "0.1.0"
-  },
+  "accounts": [
+    {
+      "name": "BaseAssetV1",
+      "discriminator": [
+        1
+      ]
+    },
+    {
+      "name": "BaseCollectionV1",
+      "discriminator": [
+        5
+      ]
+    },
+    {
+      "name": "Config",
+      "discriminator": [
+        155,
+        12,
+        170,
+        224,
+        30,
+        250,
+        204,
+        130
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidOwner",
+      "msg": "Invalid asset owner"
+    },
+    {
+      "code": 6001,
+      "name": "InvalidUpdateAuthority",
+      "msg": "Invalid update authority"
+    },
+    {
+      "code": 6002,
+      "name": "AlreadyStaked",
+      "msg": "Asset already staked"
+    },
+    {
+      "code": 6003,
+      "name": "AssetNotStaked",
+      "msg": "Asset not staked"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidTimestamp",
+      "msg": "Invalid timestamp"
+    },
+    {
+      "code": 6005,
+      "name": "FreezePeriodNotElapsed",
+      "msg": "Freeze period not elapsed"
+    },
+    {
+      "code": 6006,
+      "name": "InvalidRewardsBps",
+      "msg": "Invalid rewards bps"
+    },
+    {
+      "code": 6007,
+      "name": "NothingToClaim",
+      "msg": "Nothing to claim"
+    }
+  ],
   "types": [
     {
       "name": "BaseAssetV1",
       "type": {
+        "kind": "struct",
         "fields": [
           {
             "name": "key",
             "type": {
               "defined": {
-                "name": "StakingKey"
+                "name": "Key"
               }
             }
           },
@@ -972,19 +951,19 @@
               "option": "u64"
             }
           }
-        ],
-        "kind": "struct"
+        ]
       }
     },
     {
       "name": "BaseCollectionV1",
       "type": {
+        "kind": "struct",
         "fields": [
           {
             "name": "key",
             "type": {
               "defined": {
-                "name": "StakingKey"
+                "name": "Key"
               }
             }
           },
@@ -1008,13 +987,13 @@
             "name": "current_size",
             "type": "u32"
           }
-        ],
-        "kind": "struct"
+        ]
       }
     },
     {
       "name": "Config",
       "type": {
+        "kind": "struct",
         "fields": [
           {
             "name": "rewards_bps",
@@ -1032,12 +1011,11 @@
             "name": "bump",
             "type": "u8"
           }
-        ],
-        "kind": "struct"
+        ]
       }
     },
     {
-      "name": "StakingKey",
+      "name": "Key",
       "type": {
         "kind": "enum",
         "variants": [
@@ -1071,19 +1049,41 @@
             "name": "None"
           },
           {
+            "name": "Address",
             "fields": [
               "pubkey"
-            ],
-            "name": "Address"
+            ]
           },
           {
+            "name": "Collection",
             "fields": [
               "pubkey"
-            ],
-            "name": "Collection"
+            ]
           }
         ]
       }
+    }
+  ],
+  "constants": [
+    {
+      "name": "SECONDS_PER_DAY",
+      "type": "i64",
+      "value": "86400"
+    },
+    {
+      "name": "SEED_CONFIG",
+      "type": "bytes",
+      "value": "[99, 111, 110, 102, 105, 103]"
+    },
+    {
+      "name": "SEED_REWARDS_MINT",
+      "type": "bytes",
+      "value": "[114, 101, 119, 97, 114, 100, 115, 95, 109, 105, 110, 116]"
+    },
+    {
+      "name": "SEED_UPDATE_AUTHORITY",
+      "type": "bytes",
+      "value": "[117, 112, 100, 97, 116, 101, 95, 97, 117, 116, 104, 111, 114, 105, 116, 121]"
     }
   ]
 }

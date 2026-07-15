@@ -2,11 +2,12 @@
 //!
 //! `staking` is anchor 0.31 (an mpl-core dependency pins it), and its IDL
 //! embeds mpl-core's `Key` enum, which collides with `anchor_lang::Key` under
-//! `declare_program!`'s glob imports. `make fixtures` runs the sanitize pass
-//! (`anchor_litesvm::sanitize_idl`) over `idls/staking.json`, namespacing `Key`
-//! to `StakingKey`, so the macros generate a typed client like any other
-//! program. Every instruction here is a bundle plus typed args; the deep
-//! mpl-core CPI tree is what the program does, not something we hand-build.
+//! `declare_program!`'s glob imports. The patched anchor
+//! (cds-rs/anchor@fix/idl-collisions) isolates IDL-defined types in a private
+//! module, so the raw IDL ingests directly and the macros generate a typed
+//! client like any other program. Every instruction here is a bundle plus typed
+//! args; the deep mpl-core CPI tree is what the program does, not something we
+//! hand-build.
 #![allow(unexpected_cfgs)]
 mod common;
 
