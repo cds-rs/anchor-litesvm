@@ -56,3 +56,25 @@ proc-macro2 = "1"
 trybuild = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+# Consume the declare_program! prelude-collision fix (cds-rs/anchor@fix/idl-collisions,
+# = otter-sec/anchor#4776) ahead of a crates.io release: it moves IDL-defined names into
+# a private `__defined` module so an IDL type named after a prelude item (mpl-core's `Key`
+# enum vs the `anchor_lang::Key` trait) no longer collides. The whole anchor family is
+# pinned to one git source so no crate resolves to two sources; the fork's versions match
+# what crates.io resolves (1.1.2, idl 0.1.4/0.1.0), so the patch applies cleanly.
+[patch.crates-io]
+anchor-lang = { git = "https://github.com/cds-rs/anchor", branch = "fix/idl-collisions" }
+anchor-lang-error = { git = "https://github.com/cds-rs/anchor", branch = "fix/idl-collisions" }
+anchor-lang-idl = { git = "https://github.com/cds-rs/anchor", branch = "fix/idl-collisions" }
+anchor-lang-idl-spec = { git = "https://github.com/cds-rs/anchor", branch = "fix/idl-collisions" }
+anchor-syn = { git = "https://github.com/cds-rs/anchor", branch = "fix/idl-collisions" }
+anchor-attribute-access-control = { git = "https://github.com/cds-rs/anchor", branch = "fix/idl-collisions" }
+anchor-attribute-account = { git = "https://github.com/cds-rs/anchor", branch = "fix/idl-collisions" }
+anchor-attribute-constant = { git = "https://github.com/cds-rs/anchor", branch = "fix/idl-collisions" }
+anchor-attribute-error = { git = "https://github.com/cds-rs/anchor", branch = "fix/idl-collisions" }
+anchor-attribute-event = { git = "https://github.com/cds-rs/anchor", branch = "fix/idl-collisions" }
+anchor-attribute-program = { git = "https://github.com/cds-rs/anchor", branch = "fix/idl-collisions" }
+anchor-derive-accounts = { git = "https://github.com/cds-rs/anchor", branch = "fix/idl-collisions" }
+anchor-derive-serde = { git = "https://github.com/cds-rs/anchor", branch = "fix/idl-collisions" }
+anchor-derive-space = { git = "https://github.com/cds-rs/anchor", branch = "fix/idl-collisions" }
