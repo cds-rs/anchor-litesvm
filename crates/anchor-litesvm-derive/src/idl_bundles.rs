@@ -32,6 +32,7 @@ use syn::{Ident, LitStr, Token};
 
 use crate::classify::{classify, Classified, DeriveProgram, FieldReason, Role};
 use crate::idl::{Idl, IdlInstruction, IdlSeed};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// `bundles_from_idl!(<name>)` or `bundles_from_idl!(<name>, "path/to.json")`.
 struct Args {
@@ -91,14 +92,41 @@ pub fn expand(input: TokenStream) -> syn::Result<TokenStream> {
             ::anchor_lang::prelude::Pubkey::from_str_const(#address);
     };
 
+    // Classify every instruction up front, then find any account whose PDA
+    // helper body differs across instructions: a single module-wide
+    // `<account>_pda` free function can't serve two derivations, so those
+    // accounts are demoted to caller-supplied bundle fields everywhere rather
+    // than erroring. The real case is a receipt PDA seeded one way in `claim`
+    // and another in `close_receipt`.
+    let classifieds = idl
+        .instructions
+        .iter()
+        .map(|ix| classify(ix).map_err(|msg| syn::Error::new(name_span, msg)))
+        .collect::<syn::Result<Vec<_>>>()?;
+
+    let mut helper_forms: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for c in &classifieds {
+        for name in &c.derivation_order {
+            helper_forms
+                .entry(name.clone())
+                .or_default()
+                .insert(emit_pda_helper(c, name).to_string());
+        }
+    }
+    let divergent: BTreeSet<String> = helper_forms
+        .into_iter()
+        .filter(|(_, forms)| forms.len() > 1)
+        .map(|(name, _)| name)
+        .collect();
+
     let mut items = Vec::with_capacity(idl.instructions.len());
-    // PDA helpers are named by account, and one account (a `vault` PDA) recurs
-    // across instructions; collect them keyed by helper name so a name that
-    // derives identically everywhere is emitted once, and a name that derives
-    // two different ways surfaces as an error rather than a duplicate `fn`.
+    // A name that derives identically everywhere is emitted once; a name that
+    // derives two ways was demoted above, so `record_helper`'s divergence guard
+    // now only trips on a cascade (demoting one account changing another's
+    // body), which stays an error rather than a silent duplicate `fn`.
     let mut helpers: Vec<Helper> = Vec::new();
-    for ix in &idl.instructions {
-        let c = classify(ix).map_err(|msg| syn::Error::new(name_span, msg))?;
+    for (ix, c) in idl.instructions.iter().zip(classifieds) {
+        let c = demote_divergent(c, &divergent);
         items.push(emit_instruction(prog, ix, &c));
         for name in &c.derivation_order {
             record_helper(&mut helpers, name, emit_pda_helper(&c, name))?;
@@ -126,9 +154,11 @@ struct Helper {
 
 /// Fold one instruction's `<account>_pda` helper into the module-wide set. A
 /// second sighting with a byte-identical body is a harmless duplicate (the same
-/// PDA seen in another instruction) and is dropped; a second sighting with a
-/// different body means one account name derives two ways across the IDL, which
-/// can't collapse to a single free function, so it errors.
+/// PDA seen in another instruction) and is dropped. A second sighting with a
+/// different body means one account name derives two ways across the IDL: the
+/// caller demotes those in a pre-pass (see [`demote_divergent`]), so reaching
+/// here means a cascade the pre-pass couldn't foresee, which errors rather than
+/// emit a duplicate `fn`.
 fn record_helper(helpers: &mut Vec<Helper>, account: &str, tokens: TokenStream) -> syn::Result<()> {
     let name = format!("{account}_pda");
     let text = tokens.to_string();
@@ -147,6 +177,26 @@ fn record_helper(helpers: &mut Vec<Helper>, account: &str, tokens: TokenStream) 
     }
     helpers.push(Helper { name, text, tokens });
     Ok(())
+}
+
+/// Demote every account whose PDA helper diverges across instructions to a
+/// caller-supplied field, and drop it from the derivation order so no helper is
+/// emitted for it. Only a `Derived` role is rewritten; an account already a
+/// `Field` in this instruction keeps its own reason.
+fn demote_divergent(mut c: Classified, divergent: &BTreeSet<String>) -> Classified {
+    if divergent.is_empty() {
+        return c;
+    }
+    for (name, role) in c.roles.iter_mut() {
+        if divergent.contains(name) && matches!(role, Role::Derived { .. }) {
+            *role = Role::Field {
+                optional: false,
+                reason: FieldReason::CrossIxDivergent,
+            };
+        }
+    }
+    c.derivation_order.retain(|n| !divergent.contains(n));
+    c
 }
 
 /// Everything one instruction contributes: the bundle type, its `Default` and
@@ -259,6 +309,10 @@ fn reason_doc(reason: &FieldReason) -> String {
         ),
         FieldReason::SeedCycle => "Caller-supplied: this PDA's derivation forms a cycle with \
              another account's, so neither can be derived here."
+            .to_string(),
+        FieldReason::CrossIxDivergent => "Caller-supplied: this PDA derives differently across \
+             instructions, so a single helper can't serve every use; compute it with \
+             `find_program_address` or reuse your fixture's address."
             .to_string(),
     }
 }
@@ -557,13 +611,22 @@ mod expand_error_tests {
     }
 
     #[test]
-    fn conflicting_pda_derivation_names_the_account() {
+    fn conflicting_pda_derivation_demotes_the_account_to_a_field() {
+        // `vault` derives two different ways across this fixture's instructions,
+        // so it can't collapse to one module-wide helper. Rather than erroring,
+        // the macro demotes it to a caller-supplied bundle field in every
+        // bundle, with a doc explaining why.
         let input = quote! { conflict, "tests/idls/conflict.json" };
-        let err = expand(input).expect_err("vault derives two different ways in this fixture");
-        let msg = err.to_string();
+        let out = expand(input)
+            .expect("a divergent PDA demotes to a field, it does not error")
+            .to_string();
         assert!(
-            msg.contains("account `vault` derives differently across instructions"),
-            "expected the conflicting-derivation message, got: {msg}"
+            out.contains("pub vault :"),
+            "expected `vault` as a bundle field, got: {out}"
+        );
+        assert!(
+            out.contains("derives differently across instructions"),
+            "expected the divergence explanation in the field doc, got: {out}"
         );
     }
 

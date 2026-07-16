@@ -22,8 +22,9 @@ pub enum DeriveProgram {
 /// Why an account ended up a caller-supplied [`Role::Field`], recorded so the
 /// emitter can explain each generated bundle field with a doc comment instead
 /// of leaving an unexplained pubkey. Each variant corresponds to exactly one
-/// demotion site in [`classify`]; see that function's doc for the fixpoint
-/// this partitions.
+/// demotion site in [`classify`] (which sees one instruction at a time), except
+/// [`FieldReason::CrossIxDivergent`], which the macro applies in a
+/// cross-instruction pass no single-instruction classification can see.
 #[derive(Debug, Clone)]
 pub enum FieldReason {
     /// No `pda` at all: an ordinary account the caller always supplies.
@@ -43,6 +44,11 @@ pub enum FieldReason {
     /// This account's derivation and another's form a cycle (each waits on
     /// the other), so the fixpoint stalls with neither resolved.
     SeedCycle,
+    /// This account derives one way in one instruction and another way in
+    /// another (a receipt PDA seeded differently in `claim` vs `close_receipt`),
+    /// so a single module-wide `<account>_pda` helper can't serve both. Detected
+    /// across instructions, not from any one, and supplied per bundle.
+    CrossIxDivergent,
 }
 
 /// What one IDL account contributes to a bundle.
