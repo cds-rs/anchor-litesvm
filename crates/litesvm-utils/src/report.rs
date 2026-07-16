@@ -225,6 +225,37 @@ impl Report {
         self
     }
 
+    /// Record a state change as a before → after narrative, checked against an
+    /// expectation. Renders the story (with `note` as the reason) plus a soft
+    /// check, so a mismatch still fails the test at `Drop` the way [`Self::check`]
+    /// does. The value args are display strings (a token amount, a balance), so
+    /// callers format them however reads best.
+    pub fn transition(
+        &mut self,
+        label: impl Into<String>,
+        before: impl Into<String>,
+        expected: impl Into<String>,
+        actual: impl Into<String>,
+        note: impl Into<String>,
+    ) -> &mut Self {
+        let label = label.into();
+        let before = before.into();
+        let expected = expected.into();
+        let actual = actual.into();
+        let note = note.into();
+        self.events.push(Event::Note(format!(
+            "**{label}:** `{before}` → `{actual}` — {note}"
+        )));
+        let pass = expected == actual;
+        self.events.push(Event::Check {
+            label,
+            expected,
+            actual,
+            pass,
+        });
+        self
+    }
+
     /// HARD variant: record, then panic immediately on mismatch. For
     /// preconditions where continuing would be meaningless (a setup invariant
     /// that must hold before the interesting part runs).
