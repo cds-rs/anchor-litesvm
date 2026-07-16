@@ -168,6 +168,7 @@ pub mod assertions;
 pub mod builder;
 pub mod metaplex;
 pub mod naming;
+pub mod report;
 pub mod test_helpers;
 pub mod token_hooks;
 pub mod tokens;
@@ -183,6 +184,7 @@ pub use naming::{
     deterministic_keypair, seed_bytes, ActorRegistry, Aliases, ErrorNames, EventInfo,
     EventRegistry, InstructionNames,
 };
+pub use report::{MarkdownBlock, Report, ToMarkdown};
 pub use test_helpers::TestHelpers;
 pub use token_hooks::TransferHookTesting;
 pub use tokens::{TokenFabrication, TokenProgram, TOKEN_2022_ID};

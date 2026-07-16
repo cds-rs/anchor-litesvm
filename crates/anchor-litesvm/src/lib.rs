@@ -208,14 +208,15 @@ pub use tx::Tx;
 
 // Re-export litesvm-utils functionality for convenience
 pub use litesvm_utils::{
+    md_kv, md_table,
     metaplex::{
         Creator, MetadataArgs, MetaplexHelpers, TokenStandard, METADATA_SEED, MPL_TOKEN_METADATA_ID,
     },
     naming::{deterministic_keypair, seed_bytes, ActorRegistry},
     token_hooks::TransferHookTesting,
     tokens::{TokenFabrication, TokenProgram, TOKEN_2022_ID},
-    Aliases, AssertionHelpers, LiteSVMBuilder, TestHelpers, TransactionError, TransactionHelpers,
-    TransactionResult,
+    Aliases, AssertionHelpers, LiteSVMBuilder, MarkdownBlock, Report, TestHelpers, ToMarkdown,
+    TransactionError, TransactionHelpers, TransactionResult,
 };
 
 // Re-export commonly used external types
