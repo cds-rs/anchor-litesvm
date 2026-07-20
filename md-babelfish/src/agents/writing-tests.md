@@ -184,5 +184,6 @@ addresses, sorted), addresses each transaction as `T<n>` with day offsets,
 narrates clock warps between moments ("9 days pass"), tables the changed
 observations with grouped integers (`10,000,000,000,000`), settles refusals
 as "refused: <name>" claims with the observed error, draws the per-moment
-diagram set the standard selects, and closes with every law's and finally's
+diagram set the standard selects (a `folder` rides several views behind one
+summary line), and closes with every law's and finally's
 verdict.

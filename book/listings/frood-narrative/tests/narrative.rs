@@ -4,7 +4,7 @@
 //! whole file compiles and passes in CI, so a snippet the book shows can
 //! never drift from code that runs.
 
-use frood::blocks::{authority, cast, ownership, sequence, tree, Lifelines};
+use frood::blocks::{authority, cast, folder, ownership, sequence, tree, Lifelines};
 use frood::{Actor, BuiltIx, Outcome, ReportConfig, ReportState, Reporter, Story};
 use frood_idl::types::Value;
 use frood_idl::FromValue;
@@ -15,16 +15,17 @@ const IDL: &str = include_str!("../idls/counter.codama.json");
 
 // ANCHOR: standard
 /// The suite's report standard, declared once, beside the world it
-/// configures: each block carries its own options (`sequence` its style,
-/// `.collapsed()` composes on any block). A test that deviates assigns its
-/// own `ReportConfig::of(...)` through `report_state().config_mut()`.
+/// configures. The list is a layout: items render in declared order, each
+/// block carries its own options (`sequence` its style, `.collapsed()`
+/// composes on any bare block), and `folder` rides several views behind
+/// ONE summary line per beat, each keeping its heading inside. A test that
+/// deviates assigns its own `ReportConfig::of(...)` through
+/// `report_state().config_mut()`.
 fn report_standard() -> ReportConfig {
     ReportConfig::of([
         cast(),
-        sequence(Lifelines),
-        authority(),
-        ownership(),
         tree().collapsed(),
+        folder("diagrams", [sequence(Lifelines), authority(), ownership()]),
     ])
 }
 // ANCHOR_END: standard
