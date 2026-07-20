@@ -40,6 +40,11 @@ every deploy.
 | bundle | a struct of pubkeys deriving `Bundle`/`BundledPubkeys`; converts into Anchor accounts structs, injecting any `Program<'info, T>` |
 | scenario verb | a suite-owned function that performs one named step (`setup`, `open_session`) |
 | Report | the narrative object: steps, snapshots, and `check` assertions, written to `target/md-reports/<slug>.md` |
+| story | frood's substrate: mints a `Moment` per transaction, samples every registered observation into it |
+| trajectory | the ordered moments; a frood report is this, projected once at world drop |
+| observation | a labeled read registered once (`story.observe`), sampled at every moment; laws (`monotonic`/`latch`/`constant`) watch one |
+| finally | a terminal fact settled at the story's conclusion (`count_actions`, law status) |
+| report standard | `ReportConfig::of([cast(), sequence(Lifelines), ...])`, declared once beside the world; a test attenuates its own copy via `report_state().config_mut()` |
 | event | a program event registered once (`register_events_from_idl` / `register_event::<E>()`), rendered by name and destructured, aliased fields in the structured views |
 | TestSVM | the backend trait: one vocabulary, one engine per build |
 | finding | an audit claim told as a byte-stable `Report` another auditor can reproduce |
@@ -58,6 +63,7 @@ every deploy.
 | default | narrative: thread a `Report`, `md.step` each step, `md.check` as assertions |
 | quick unit-style check | plain Arrange // Act // Assert: same calls, no `Report` |
 | documenting a state change / violated invariant | `md.transition(before, after, meaning)`, not a `check` checklist |
+| program is a committed `.so` + Codama IDL (no crate) | frood story world: `when_ok`/`when_err` verbs, observations + laws, projection at drop (see [Writing Tests](writing-tests.md), "Narrative on frood") |
 
 Both shapes use the identical execution surface; the `Report` is additive.
 See [Writing Tests](writing-tests.md).

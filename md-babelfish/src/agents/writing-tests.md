@@ -111,3 +111,78 @@ mermaid strings (`authority_graph_string`, `ownership_graph_string`,
 `mermaid_string`) are already ` ```mermaid ` blocks, so they go in as `Raw`;
 wrapping one in `Fenced` nests it inside a `text` code block, and it renders as
 source instead of a diagram.
+
+## Narrative on frood (source-free)
+
+When the program under test arrives as a committed `.so` plus a Codama IDL
+(no program crate anywhere in the graph), the same narrative discipline runs
+on frood, the sol-babelfish story engine. The fundamental difference from the
+`Report` builder above: nothing is written down as it happens. `Story` mints
+a `Moment` per transaction and samples every registered observation into it;
+the report is a projection of that trajectory, rendered once when the world
+drops, and only when a report was asked for
+(`FROOD_LINK_REPORT_DIR=<dir> cargo test`; a plain run pays nothing beyond
+the flag read).
+
+The suite declares its report standard once, in code, beside the world it
+configures (there is no manifest to drift apart from the tests):
+
+```rust
+{{#include ../../listings/frood-narrative/tests/narrative.rs:standard}}
+```
+
+A world derives `Reporter`, holds the `Story` and its cast, and renders at
+`Drop`. Views decode through `#[derive(FromValue)]`; an observation is
+registered once and sampled at every moment on its own; a law (`monotonic`,
+`latch`, `constant`, or a free predicate) is evaluated at every mint, and a
+break is located to its `T`:
+
+```rust
+{{#include ../../listings/frood-narrative/tests/narrative.rs:view}}
+```
+
+```rust
+{{#include ../../listings/frood-narrative/tests/narrative.rs:world}}
+```
+
+Sends are two verbs. `when_ok` asserts success and panics with the story so
+far at the caller's line (setup, happy-path beats: anything whose failure
+means "stop here"). `when_err` asserts a named refusal and settles it as a
+Then claim (the security half of a suite):
+
+```rust
+{{#include ../../listings/frood-narrative/tests/narrative.rs:sends}}
+```
+
+A send outside `when`'s bundle vocabulary (a foreign program's instruction
+in the transaction, explicit account metas) is still a named beat, through
+`run_instruction_as`/`run_instructions_as`; leave it unlabeled and it
+renders as a bare "(instruction)" heading, invisible to `count_actions`:
+
+```rust
+{{#include ../../listings/frood-narrative/tests/narrative.rs:raw}}
+```
+
+A test threads beats and settles terminal facts with `finally`; the
+conclusion runs at world drop, so a law that broke and that nothing ever
+asserted on still fails the test:
+
+```rust
+{{#include ../../listings/frood-narrative/tests/narrative.rs:narrative}}
+```
+
+A single test that deviates from the standard assigns its own
+`ReportConfig::of(...)` through `report_state().config_mut()`, in the test
+that owns the deviation (typed, rename-safe, runner-agnostic):
+
+```rust
+{{#include ../../listings/frood-narrative/tests/narrative.rs:attenuate}}
+```
+
+The rendered projection opens with the cast (every registered alias, full
+addresses, sorted), addresses each transaction as `T<n>` with day offsets,
+narrates clock warps between moments ("9 days pass"), tables the changed
+observations with grouped integers (`10,000,000,000,000`), settles refusals
+as "refused: <name>" claims with the observed error, draws the per-moment
+diagram set the standard selects, and closes with every law's and finally's
+verdict.

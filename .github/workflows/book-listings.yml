@@ -67,6 +67,7 @@ jobs:
             book/listings/vault
             book/listings/escrow
             book/listings/cpamm
+            book/listings/frood-narrative
 
       # `--no-idl`: the book never uses an IDL (no `declare_program!`), and
       # skipping IDL generation avoids host-compiling the test targets during
@@ -74,11 +75,21 @@ jobs:
       # is gitignored) that won't match the committed `declare_id!`; the book
       # references `<prog>::ID` and LiteSVM loads the `.so` at that id
       # regardless, so the build and the test stay self-consistent.
+      #
+      # A source-free listing (frood-narrative: a committed .so driven through
+      # its Codama IDL) has no Anchor.toml and nothing for `anchor build` to
+      # do; it goes straight to `cargo test`.
       - name: Build and test each listing
         run: |
           set -euo pipefail
           for dir in book/listings/*/; do
             echo "::group::$dir"
-            ( cd "$dir" && anchor build --no-idl --ignore-keys && cargo test --tests )
+            (
+              cd "$dir"
+              if [ -f Anchor.toml ]; then
+                anchor build --no-idl --ignore-keys
+              fi
+              cargo test --tests
+            )
             echo "::endgroup::"
           done

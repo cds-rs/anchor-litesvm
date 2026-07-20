@@ -1,0 +1,18 @@
+[package]
+name = "frood-narrative"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Standalone workspace: frood rides its own pinned litesvm, so this listing's
+# dependency graph never mixes with the Anchor listings' (engines never share
+# a lockfile; see the Dependencies page). The program under test is the
+# committed fixtures/counter.so driven through its Codama IDL: no program
+# crate, no Anchor toolchain, which is exactly the consumer shape this
+# listing documents.
+[workspace]
+
+[dependencies]
+frood = { git = "https://github.com/pan-galactic/sol-babelfish", rev = "7efdfea4d08fbf33ee27b1078192597bf0471387" }
+frood-idl = { git = "https://github.com/pan-galactic/sol-babelfish", rev = "7efdfea4d08fbf33ee27b1078192597bf0471387" }
+solana-pubkey = { version = "3.0", features = ["curve25519"] }
