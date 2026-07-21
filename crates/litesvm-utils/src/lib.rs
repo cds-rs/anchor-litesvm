@@ -190,11 +190,10 @@ pub use observe::{
     ObserverRegistry, SignerAuthority,
 };
 // `report` is engine-neutral test-output vocabulary; it lives on the spine now.
-// Re-exported (module + types + the `md_*` macros) so the old `litesvm_utils`
-// paths keep resolving for the book and dogfooders.
+// Re-exported (module + types + the frood-guide document vocabulary) so the old
+// `litesvm_utils` paths keep resolving for the book and dogfooders.
 pub use testsvm::report;
-pub use testsvm::report::{ActBuilder, MarkdownBlock, Report, ToMarkdown};
-pub use testsvm::{md_kv, md_table};
+pub use testsvm::report::{ActBuilder, Block, Cell, Report, TableModel, ToBlock};
 pub use test_helpers::TestHelpers;
 pub use testsvm::{model, Capabilities, TestSVM};
 pub use token_hooks::TransferHookTesting;

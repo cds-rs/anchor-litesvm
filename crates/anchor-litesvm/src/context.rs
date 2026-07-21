@@ -4,8 +4,8 @@ use anchor_lang::AccountDeserialize;
 use litesvm::LiteSVM;
 use litesvm_utils::actors::deterministic_keypair;
 use litesvm_utils::{
-    model, Aliases, AuthorityStory, Capabilities, ErrorNames, EventRegistry, InstructionInfo,
-    InstructionNames, MarkdownBlock, Report, TestHelpers, TestSVM, TraceHandle, TraceRecorder,
+    model, Aliases, AuthorityStory, Block, Capabilities, ErrorNames, EventRegistry,
+    InstructionInfo, InstructionNames, Report, TestHelpers, TestSVM, TraceHandle, TraceRecorder,
     TransactionHelpers, TransactionResult,
 };
 use solana_account::Account;
@@ -498,9 +498,8 @@ impl AnchorContext {
     /// when it isn't aliased. Shorthand for `self.aliases.label(&pubkey)`.
     ///
     /// Built for report rows: alias the accounts a scenario names (actors,
-    /// PDAs), then drop `ctx.label(&pk)` straight into a
-    /// [`md_table!`](crate::md_table) / [`md_kv!`](crate::md_kv) cell instead
-    /// of hand-rolling a pubkey-to-name match.
+    /// PDAs), then drop `ctx.label(&pk)` straight into a table
+    /// [`Cell`](crate::Cell) instead of hand-rolling a pubkey-to-name match.
     pub fn label(&self, pubkey: &Pubkey) -> String {
         self.aliases.label(pubkey)
     }
@@ -687,23 +686,23 @@ impl AnchorContext {
 
     /// The account index for this test: every account the sends touched,
     /// classified by owner program and authority class, with ATA parent edges
-    /// recovered by reverse-derivation. A [`MarkdownBlock`] ready for
+    /// recovered by reverse-derivation. A [`Block`] ready for
     /// `md.block("account index", ctx.account_index())`.
-    pub fn account_index(&self) -> MarkdownBlock {
+    pub fn account_index(&self) -> Block {
         let story = self.authority_story();
-        MarkdownBlock::Fenced {
-            lang: "text".to_string(),
-            body: story.account_index().to_tree(&self.aliases),
+        Block::Fenced {
+            lang: Some("text".to_string()),
+            text: story.account_index().to_tree(&self.aliases),
         }
     }
 
     /// The structured program logs of every send on this context, in submission
-    /// order (one block per transaction). A [`MarkdownBlock`] for
+    /// order (one block per transaction). A [`Block`] for
     /// `md.block("structured logs", ctx.transaction_logs())`.
-    pub fn transaction_logs(&self) -> MarkdownBlock {
-        MarkdownBlock::Fenced {
-            lang: "text".to_string(),
-            body: self.journal.join("\n"),
+    pub fn transaction_logs(&self) -> Block {
+        Block::Fenced {
+            lang: Some("text".to_string()),
+            text: self.journal.join("\n"),
         }
     }
 

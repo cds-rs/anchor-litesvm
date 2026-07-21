@@ -48,11 +48,11 @@ use anchor_spl::associated_token::get_associated_token_address;
 // usual `common::` path.
 pub use amm::test_helpers::{Pool, UserAccounts};
 
-// The scenario-level Markdown recorder and its rendering types now live in
+// The scenario-level Markdown recorder and its rendering vocabulary now live in
 // anchor-litesvm (shared across test crates); re-export so test files keep the
-// familiar `common::{Report, MarkdownBlock}` import path. `print_markdown_pair()`
+// familiar `common::{Report, Block}` import path. `print_markdown_pair()`
 // documents one transaction; a `Report` documents one whole test.
-pub use anchor_litesvm::{MarkdownBlock, Report, ToMarkdown};
+pub use anchor_litesvm::{Block, Cell, Report, TableModel, ToBlock};
 
 /// Compiled program bytes. Tests assume `cargo build-sbf -p amm` ran first;
 /// the justfile / pre-commit wraps that.
@@ -445,19 +445,20 @@ impl Scenario {
     /// noise in a human-facing report, and *which* actor holds it is better said
     /// in prose (`md.note("authority rotated to BobAdmin")`) or pinned by a
     /// `check` on the exact pubkey. This snapshot is for the at-a-glance state.
-    pub fn observe_config(&self, pool: &Pool) -> MarkdownBlock {
+    pub fn observe_config(&self, pool: &Pool) -> Block {
         let config: amm::Config = self.ctx.load(&pool.config);
-        MarkdownBlock::kv(
-            ["field", "value"],
-            [
-                ("seed".to_string(), config.seed.to_string()),
-                ("fee_bps".to_string(), config.fee_bps.to_string()),
-                ("locked".to_string(), config.locked.to_string()),
-                (
-                    "authority".to_string(),
-                    if config.authority.is_some() { "set" } else { "renounced" }.to_string(),
-                ),
-            ],
+        let authority = if config.authority.is_some() { "set" } else { "renounced" };
+        Block::Table(
+            TableModel::new(
+                vec!["field".to_string(), "value".to_string()],
+                vec![
+                    vec![Cell::from("seed"), Cell::from(config.seed.to_string())],
+                    vec![Cell::from("fee_bps"), Cell::from(config.fee_bps.to_string())],
+                    vec![Cell::from("locked"), Cell::from(config.locked.to_string())],
+                    vec![Cell::from("authority"), Cell::from(authority)],
+                ],
+            )
+            .expect("a two-column config table"),
         )
     }
 }
@@ -481,13 +482,19 @@ impl Balances {
     }
 }
 
-impl ToMarkdown for Balances {
-    fn to_markdown(&self) -> MarkdownBlock {
-        MarkdownBlock::kv(
-            ["account", "balance"],
-            self.rows
-                .iter()
-                .map(|(k, b)| (k.clone(), b.map_or_else(|| "—".into(), |v| v.to_string()))),
+impl ToBlock for Balances {
+    fn to_block(&self) -> Block {
+        let rows = self
+            .rows
+            .iter()
+            .map(|(k, b)| {
+                let balance = b.map_or_else(|| "—".to_string(), |v| v.to_string());
+                vec![Cell::from(k.as_str()), Cell::from(balance)]
+            })
+            .collect();
+        Block::Table(
+            TableModel::new(vec!["account".to_string(), "balance".to_string()], rows)
+                .expect("a two-column balances table"),
         )
     }
 }

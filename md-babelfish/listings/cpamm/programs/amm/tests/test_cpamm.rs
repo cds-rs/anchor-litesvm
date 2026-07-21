@@ -3,7 +3,7 @@ mod common;
 use amm::test_helpers::Pool;
 use amm::{instruction as vix, SwapKind};
 use anchor_litesvm::TestHelpers;
-use common::{setup, MarkdownBlock, Report, Scenario};
+use common::{setup, Block, Report, Scenario};
 
 // The constant product `k = reserve_x * reserve_y`. A swap may only grow it
 // (by the fee), never shrink it.
@@ -149,7 +149,7 @@ fn admin_trades_through_a_locked_pool() {
         .send_err_named("PoolLocked");
     md.block(
         "Bob blocked (pool locked)",
-        MarkdownBlock::Fenced { lang: "console".into(), body: bob_blocked.logs_structured_string() },
+        Block::Fenced { lang: Some("console".into()), text: bob_blocked.logs_structured_string() },
     );
 
     // ANCHOR: attack
@@ -180,7 +180,7 @@ fn admin_trades_through_a_locked_pool() {
     md.step("The attack: unlock + admin swap + relock, in one atomic transaction");
     md.block(
         "the atomic attack transaction",
-        MarkdownBlock::Fenced { lang: "console".into(), body: attack.logs_structured_string() },
+        Block::Fenced { lang: Some("console".into()), text: attack.logs_structured_string() },
     );
 
     md.step("Honest Bob is locked out again on the far side of the window");

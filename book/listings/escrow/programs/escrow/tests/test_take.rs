@@ -11,7 +11,7 @@
 
 mod common;
 
-use anchor_litesvm::{AnchorLiteSVM, MarkdownBlock, Pubkey, Report, TestHelpers};
+use anchor_litesvm::{AnchorLiteSVM, Block, Pubkey, Report, TestHelpers};
 use common::{balances, setup, DEPOSIT, RECEIVE, SEED};
 
 const PROGRAM_SO: &[u8] = include_bytes!("../../../target/deploy/escrow.so");
@@ -105,7 +105,7 @@ fn take_and_close_fails_after_expiry() {
         .send_err_named("EscrowExpired");
     md.block(
         "rejection logs",
-        MarkdownBlock::Fenced { lang: "console".into(), body: rejection.logs_structured_string() },
+        Block::Fenced { lang: Some("console".into()), text: rejection.logs_structured_string() },
     );
 
     md.step("After: nothing settled; the deposit is still in the vault");
@@ -149,7 +149,7 @@ fn take_rejects_wrong_vault() {
         .send_err_named("AccountNotInitialized");
     md.block(
         "rejection logs",
-        MarkdownBlock::Fenced { lang: "console".into(), body: rejection.logs_structured_string() },
+        Block::Fenced { lang: Some("console".into()), text: rejection.logs_structured_string() },
     );
 
     md.step("After: the real escrow and vault are intact");

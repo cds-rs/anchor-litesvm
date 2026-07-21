@@ -11,7 +11,7 @@
 
 mod common;
 
-use anchor_litesvm::{AnchorLiteSVM, MarkdownBlock, Pubkey, Report, TestHelpers};
+use anchor_litesvm::{AnchorLiteSVM, Block, Pubkey, Report, TestHelpers};
 use common::{balances, setup, EscrowBundle, DEPOSIT, RECEIVE, SEED};
 
 const PROGRAM_SO: &[u8] = include_bytes!("../../../target/deploy/escrow.so");
@@ -97,7 +97,7 @@ fn refund_fails_before_expiry() {
         .send_err_named("EscrowNotExpired");
     md.block(
         "rejection logs",
-        MarkdownBlock::Fenced { lang: "console".into(), body: rejection.logs_structured_string() },
+        Block::Fenced { lang: Some("console".into()), text: rejection.logs_structured_string() },
     );
 
     md.step("After: the deposit is still escrowed");
@@ -145,7 +145,7 @@ fn refund_rejects_wrong_maker() {
         .send_err_named("ConstraintTokenOwner");
     md.block(
         "rejection logs",
-        MarkdownBlock::Fenced { lang: "console".into(), body: rejection.logs_structured_string() },
+        Block::Fenced { lang: Some("console".into()), text: rejection.logs_structured_string() },
     );
 
     md.step("After: the real escrow and vault are intact");

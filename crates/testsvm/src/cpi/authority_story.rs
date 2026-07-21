@@ -14,7 +14,7 @@
 //!   `TransactionResult::authority_mermaid_string()`): one diagram per
 //!   transaction.
 //! - **Per test** ([`AuthorityStory`], surfaced as `Report::authority()` via
-//!   [`ToMarkdown`]): sections accumulate per submitted transaction and emit
+//!   [`ToBlock`]): sections accumulate per submitted transaction and emit
 //!   as one diagram with unified lanes, so the same signer occupies the same
 //!   lane in every section.
 //!
@@ -72,10 +72,8 @@ use {
         mermaid::{mermaid_id, INDENT},
         model::{from_transaction, CpiModel, Outcome},
     },
-    crate::{
-        model::Transaction,
-        report::{MarkdownBlock, ToMarkdown},
-    },
+    crate::{model::Transaction, report::ToBlock},
+    frood_guide::Block,
     solana_pubkey::Pubkey,
     std::fmt::Write,
 };
@@ -299,14 +297,14 @@ struct Section {
 ///
 /// Feeding: `AnchorContext` appends a section automatically on every send
 /// (the zero-ceremony path), and [`section`](Self::section) is the manual
-/// hatch for curated stories. Render via [`ToMarkdown`] (so it drops into
+/// hatch for curated stories. Render via [`ToBlock`] (so it drops into
 /// `Report::authority()` / `Report::snapshot()`), or [`mermaid_string`](
 /// Self::mermaid_string) for the fenced block directly.
 #[derive(Clone, Default)]
 pub struct AuthorityStory {
     sections: Vec<Section>,
     /// Alias table used at render time; refreshed on every section append
-    /// (last table wins, which is the fullest one). [`ToMarkdown`] takes no
+    /// (last table wins, which is the fullest one). [`ToBlock`] takes no
     /// arguments, so the table must be captured rather than passed.
     aliases: Option<Aliases>,
     /// Caption for the next section appended, set by [`spotlight`](Self::spotlight)
@@ -345,7 +343,7 @@ impl AuthorityStory {
     fn push(&mut self, label: String, tx: &Transaction, model: CpiModel) {
         // The neutral record always carries an alias table (well-known at
         // least); refreshed on every append so the fullest table wins, captured
-        // for render time since `ToMarkdown` takes no arguments.
+        // for render time since `ToBlock` takes no arguments.
         self.aliases = Some(tx.aliases.clone());
         let spotlight = self.pending_spotlight.take();
         self.sections.push(Section {
@@ -572,11 +570,11 @@ impl AuthorityStory {
     }
 }
 
-impl ToMarkdown for AuthorityStory {
-    fn to_markdown(&self) -> MarkdownBlock {
-        MarkdownBlock::Fenced {
-            lang: "mermaid".to_string(),
-            body: self.render_body(),
+impl ToBlock for AuthorityStory {
+    fn to_block(&self) -> Block {
+        Block::Fenced {
+            lang: Some("mermaid".to_string()),
+            text: self.render_body(),
         }
     }
 }
@@ -1337,8 +1335,8 @@ mod tests {
         let story = AuthorityStory::new();
         assert!(story.is_empty());
         assert_eq!(story.mermaid_string(), "");
-        match story.to_markdown() {
-            MarkdownBlock::Fenced { body, .. } => assert_eq!(body, ""),
+        match story.to_block() {
+            Block::Fenced { text, .. } => assert_eq!(text, ""),
             _ => panic!("expected fenced block"),
         }
     }

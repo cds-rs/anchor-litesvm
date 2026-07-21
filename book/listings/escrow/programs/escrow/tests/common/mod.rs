@@ -17,7 +17,7 @@
 #![allow(dead_code)]
 
 use anchor_litesvm::{
-    AnchorContext, Keypair, MarkdownBlock, Pubkey, Signer, TestHelpers, ToMarkdown,
+    AnchorContext, Block, Cell, Keypair, Pubkey, Signer, TableModel, TestHelpers, ToBlock,
 };
 // anchor-litesvm has no pure ATA-derivation helper (it only offers
 // `create_associated_token_account`, which *creates*), so we keep a direct dep
@@ -132,7 +132,7 @@ pub fn setup(ctx: &mut AnchorContext, seed: u64) -> EscrowWorld {
 ///
 /// Hand-rolled here, as in the AMM (`Balances`) and vault (`SolBalances`): this
 /// is the THIRD consumer to write the same "labelled balances -> kv table"
-/// `ToMarkdown`. Strong signal that a generic balances view belongs upstream.
+/// `ToBlock`. Strong signal that a generic balances view belongs upstream.
 pub struct TokenBalances {
     rows: Vec<(String, Option<u64>)>,
 }
@@ -148,14 +148,18 @@ impl TokenBalances {
     }
 }
 
-impl ToMarkdown for TokenBalances {
-    fn to_markdown(&self) -> MarkdownBlock {
-        MarkdownBlock::kv(
+impl ToBlock for TokenBalances {
+    fn to_block(&self) -> Block {
+        // A two-column "account / amount" kv table in the guide vocabulary: plain
+        // Text cells (the amounts are pre-formatted, no thousands policy), an
+        // absent balance shown as an em dash.
+        Block::Table(TableModel::kv(
             ["account", "amount"],
-            self.rows
-                .iter()
-                .map(|(k, v)| (k.clone(), v.map_or_else(|| "—".into(), |n| n.to_string()))),
-        )
+            self.rows.iter().map(|(k, v)| {
+                let amount = v.map_or_else(|| "—".to_string(), |n| n.to_string());
+                (Cell::from(k.as_str()), Cell::from(amount))
+            }),
+        ))
     }
 }
 

@@ -240,11 +240,10 @@ pub use tx::Tx;
 // Re-export litesvm-utils functionality for convenience
 pub use litesvm_utils::{
     actors::{deterministic_keypair, seed_bytes, ActorRegistry},
-    md_kv, md_table,
     metaplex::{
         Creator, MetadataArgs, MetaplexHelpers, TokenStandard, METADATA_SEED, MPL_TOKEN_METADATA_ID,
     },
-    report::{MarkdownBlock, Report, ToMarkdown},
+    report::{Block, Cell, Report, TableModel, ToBlock},
     token_hooks::TransferHookTesting,
     tokens::{TokenFabrication, TokenProgram, TOKEN_2022_ID},
     Aliases, AssertionHelpers, AuthorityStory, LiteSVMBuilder, TestHelpers, TestSVM,

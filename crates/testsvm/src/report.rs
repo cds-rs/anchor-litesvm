@@ -17,7 +17,7 @@
 //!
 //! This module is domain-agnostic: it knows nothing about your program's
 //! accounts. Domain types earn a place in a report by implementing
-//! [`ToMarkdown`]; assemble the per-scenario files (one per test, named by a
+//! [`ToBlock`]; assemble the per-scenario files (one per test, named by a
 //! slug of the title) into a single document with a `just`-style concat step.
 
 mod block;
@@ -32,7 +32,11 @@ mod render;
 mod reporter;
 mod scenario;
 
-pub use block::{MarkdownBlock, ToMarkdown};
+pub use block::ToBlock;
+// The frood-guide vocabulary a report is built from, re-exported so a consumer
+// reaches `Block` / `Cell` / `TableModel` through this crate's report surface
+// (and, transitively, through anchor-litesvm) without a direct frood-guide dep.
+pub use frood_guide::{Block, Cell, TableModel};
 pub use canonical::{canonical_json, fingerprint};
 pub use fingerprint::{diff, merkle, Change, ChangeKind, Manifest};
 pub use core::{ActBuilder, Report};
@@ -40,8 +44,10 @@ pub use normalize::{normalize_default, NormalFrame, NormalRecord};
 pub use observation::{record, record_slug, summary, verdict, Anchor, ExecutionFacts, Expect, FactFrame, Observation, ReportRecord, SCHEMA_VERSION};
 pub use reporter::Reporter;
 pub use scenario::{render_index, render_scenario};
-// `md_kv!` / `md_table!` are `#[macro_export]`, so they land at the crate root
-// regardless of which submodule defines them; no re-export needed here.
+// A domain value reaches a report as a `frood_guide::Block`: either built
+// directly and handed to `Report::block`, or via a `ToBlock` impl for
+// `Report::snapshot` / `Report::authority`. The report emits the assembled
+// blocks through frood-guide's Markdown renderer.
 //
 // `Status` is `pub(super)` (visible within the `report` module tree); tests
 // that need it import it as `super::render::Status` from within the tree.

@@ -29,7 +29,8 @@
 
 use {
     super::{aliases::Aliases, model::CpiModel},
-    crate::report::{MarkdownBlock, ToMarkdown},
+    crate::report::ToBlock,
+    frood_guide::Block,
     solana_pubkey::Pubkey,
     std::collections::BTreeMap,
     std::fmt::Write,
@@ -327,14 +328,14 @@ impl AccountIndex {
     }
 }
 
-impl ToMarkdown for AccountIndex {
-    fn to_markdown(&self) -> MarkdownBlock {
+impl ToBlock for AccountIndex {
+    fn to_block(&self) -> Block {
         // Rendered against well-known names only; callers wanting their own
         // actor/PDA names use `to_tree(&aliases)` directly (the context
         // convenience does exactly that).
-        MarkdownBlock::Fenced {
-            lang: "text".to_string(),
-            body: self.to_tree(&Aliases::default()),
+        Block::Fenced {
+            lang: Some("text".to_string()),
+            text: self.to_tree(&Aliases::default()),
         }
     }
 }

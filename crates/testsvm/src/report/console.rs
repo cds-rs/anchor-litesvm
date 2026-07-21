@@ -3,15 +3,12 @@
 
 use {
     super::{
-        block::MarkdownBlock,
         core::{Event, Report},
         render::{ReportRenderer, Status},
     },
     crate::style::Style,
-    comfy_table::{presets::UTF8_BORDERS_ONLY, ContentArrangement, Table},
+    frood_guide::Block,
 };
-
-pub(super) const CONSOLE_WIDTH: u16 = 100;
 
 pub(super) struct ConsoleRenderer {
     pub(super) style: Style,
@@ -89,35 +86,49 @@ impl ConsoleRenderer {
         }
     }
 
-    fn render_block(&self, block: &MarkdownBlock, indent: usize, out: &mut String) {
+    fn render_block(&self, block: &Block, indent: usize, out: &mut String) {
         let pad = "  ".repeat(indent);
         match block {
-            MarkdownBlock::Table { headers, rows } => {
-                let mut t = Table::new();
-                t.load_preset(UTF8_BORDERS_ONLY)
-                    .set_content_arrangement(ContentArrangement::Dynamic)
-                    .set_width(CONSOLE_WIDTH);
-                t.set_header(headers.clone());
-                for row in rows {
-                    t.add_row(row.clone());
-                }
-                for line in t.to_string().lines() {
+            // A table renders through frood-guide's own Unicode-box terminal
+            // skin, indented into the report's tree.
+            Block::Table(t) => {
+                for line in t.terminal().lines() {
                     out.push_str(&pad);
                     out.push_str(line);
                     out.push('\n');
                 }
             }
-            MarkdownBlock::Fenced { body, .. } => {
-                for line in body.lines() {
+            // Fenced content (logs, a captured dump) prints as indented literal.
+            Block::Fenced { text, .. } => {
+                for line in text.lines() {
                     out.push_str(&pad);
                     out.push_str("    ");
                     out.push_str(line);
                     out.push('\n');
                 }
             }
-            // Raw is verbatim markdown (mermaid, spliced fragments): skipped in
-            // the console; it lives only in the committed .md file.
-            MarkdownBlock::Raw(_) => {}
+            Block::Prose(text) | Block::Heading(_, text) => {
+                out.push_str(&pad);
+                out.push_str(text);
+                out.push('\n');
+            }
+            Block::BulletList(items) => {
+                for item in items {
+                    out.push_str(&pad);
+                    out.push_str("  • ");
+                    out.push_str(item);
+                    out.push('\n');
+                }
+            }
+            Block::Callout { body, .. } => {
+                out.push_str(&pad);
+                out.push_str(body);
+                out.push('\n');
+            }
+            // Verbatim markdown (mermaid, spliced fragments) and the diagram
+            // models are markdown-only: skipped in the console; they live only in
+            // the committed .md file.
+            Block::Verbatim(_) | Block::Sequence(_) | Block::Graph(_) => {}
         }
     }
 
@@ -134,7 +145,7 @@ impl ConsoleRenderer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::report::MarkdownBlock;
+    use frood_guide::{Cell, TableModel};
 
     fn plain() -> ConsoleRenderer {
         ConsoleRenderer { style: Style::Off }
@@ -162,31 +173,25 @@ mod tests {
     }
 
     #[test]
-    fn table_snapshot_frames_and_wraps_a_long_cell() {
+    fn table_snapshot_frames_a_table() {
         let mut r = Report::new("T", "i");
-        r.block(
-            "state",
-            MarkdownBlock::Table {
-                headers: vec!["k".into(), "meaning".into()],
-                rows: vec![vec![
-                    "x".into(),
-                    "a very long explanation that must wrap across more than one line in the cell so we exceed the width".into(),
-                ]],
-            },
-        );
+        let table = TableModel::new(
+            vec!["k".into(), "meaning".into()],
+            vec![vec![Cell::from("x"), Cell::from("the delegate is set")]],
+        )
+        .expect("rectangular");
+        r.block("state", Block::Table(table));
         let out = plain().render(&r, Status::Pass);
         assert!(out.contains('┌') && out.contains('│'), "framed table missing:\n{out}");
-        // wrapped → the long cell produced more than one body line
-        assert!(out.matches('│').count() > 4, "expected wrapping:\n{out}");
         r.disarm();
     }
 
     #[test]
-    fn raw_block_is_skipped_in_console() {
+    fn verbatim_block_is_skipped_in_console() {
         let mut r = Report::new("T", "i");
-        r.block("diagram", MarkdownBlock::raw("```mermaid\nflowchart LR\nA-->B\n```"));
+        r.block("diagram", Block::Verbatim("```mermaid\nflowchart LR\nA-->B\n```".into()));
         let out = plain().render(&r, Status::Pass);
-        assert!(!out.contains("mermaid"), "Raw leaked into console:\n{out}");
+        assert!(!out.contains("mermaid"), "Verbatim leaked into console:\n{out}");
         r.disarm();
     }
 

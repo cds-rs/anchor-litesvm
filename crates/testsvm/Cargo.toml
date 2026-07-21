@@ -30,12 +30,15 @@ solana-system-interface = { version = "3.1", features = ["bincode"] }
 base64 = "0.22"
 # Insertion-ordered maps/sets for the CPI renderers (legend, graph nodes/edges).
 indexmap = "2.12"
-# Framed, wrapping tables for the console Report renderer. No TTY/styling
-# features: column widths and borders only.
-comfy-table = { version = "7", default-features = false }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# The document vocabulary the report's markdown emits through: one flat-block IR
+# with typed cells and fold ops, rendered by frood-guide's own Markdown skin, so
+# testsvm and frood (the other producer) render the same bytes from one renderer.
+# Pinned to the guide/verbatim-block rev, which adds the Verbatim escape hatch
+# (pre-rendered mermaid) and the dominating-fence rule the report relies on.
+frood-guide = { git = "https://github.com/pan-galactic/sol-babelfish", rev = "0bdf4300b9381120a1f3f0067f73c983285576ad" }
 sha2 = "0.10"
 hex = "0.4"
 flate2 = { version = "1", optional = true }

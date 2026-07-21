@@ -103,8 +103,8 @@ impl Aliases {
     /// Built for report rows (before/after tables and the like): alias
     /// the accounts you want named, and anything you miss still renders
     /// compactly and identically to how the structured tree shows it.
-    /// Returns an owned `String` so it drops straight into a
-    /// `MarkdownBlock` cell.
+    /// Returns an owned `String` so it drops straight into a table
+    /// [`Cell`](frood_guide::Cell).
     pub fn label(&self, pubkey: &Pubkey) -> String {
         self.resolve_by_pubkey(pubkey)
             .map(str::to_string)

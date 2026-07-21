@@ -6,7 +6,7 @@
 
 mod common;
 
-use anchor_litesvm::{AnchorLiteSVM, MarkdownBlock, Pubkey, Report, TestHelpers};
+use anchor_litesvm::{AnchorLiteSVM, Block, Pubkey, Report, TestHelpers};
 use common::{balances, setup, DEPOSIT, RECEIVE, SEED};
 
 const PROGRAM_SO: &[u8] = include_bytes!("../../../target/deploy/escrow.so");
@@ -88,7 +88,7 @@ fn make_rejects_wrong_escrow_pda() {
         .send_err_named("ConstraintSeeds");
     md.block(
         "rejection logs",
-        MarkdownBlock::Fenced { lang: "console".into(), body: rejection.logs_structured_string() },
+        Block::Fenced { lang: Some("console".into()), text: rejection.logs_structured_string() },
     );
 
     md.step("After: nothing moved; the maker still holds the deposit");

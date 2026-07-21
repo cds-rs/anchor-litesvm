@@ -1,7 +1,9 @@
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 
-use super::block::MarkdownBlock;
+use frood_guide::Block;
+
+use super::block::ToBlock;
 use super::render::{ReportRenderer, Status};
 
 /// One entry in the report, kept in the order the test produced it.
@@ -11,7 +13,7 @@ pub(super) enum Event {
     /// A paragraph of prose.
     Note(String),
     /// A render-ready view of some state captured at one instant.
-    Snapshot { label: String, block: MarkdownBlock },
+    Snapshot { label: String, block: Block },
     /// An observed value compared against an expectation.
     Check {
         label: String,
@@ -94,16 +96,17 @@ impl Report {
     // --- structure channel ------------------------------------------------
 
     /// Capture a render-ready view of some state at this instant.
-    pub fn snapshot(&mut self, label: impl Into<String>, value: &impl super::block::ToMarkdown) -> &mut Self {
+    pub fn snapshot(&mut self, label: impl Into<String>, value: &impl ToBlock) -> &mut Self {
         self.events.push(Event::Snapshot {
             label: label.into(),
-            block: value.to_markdown(),
+            block: value.to_block(),
         });
         self
     }
 
-    /// Attach a pre-rendered block directly (e.g. a `Fenced` block of logs).
-    pub fn block(&mut self, label: impl Into<String>, block: MarkdownBlock) -> &mut Self {
+    /// Attach a frood-guide [`Block`] directly (e.g. a `Fenced` block of logs, or
+    /// a `Table` built with [`TableModel`](frood_guide::TableModel)).
+    pub fn block(&mut self, label: impl Into<String>, block: Block) -> &mut Self {
         self.events.push(Event::Snapshot {
             label: label.into(),
             block,
@@ -115,10 +118,10 @@ impl Report {
     /// the program signed as via `invoke_signed`" flow, captured by
     /// [`AnchorContext::authority_story`](../../anchor_litesvm/struct.AnchorContext.html).
     /// Rendered as an "Authority flow" section.
-    pub fn authority(&mut self, story: &impl super::block::ToMarkdown) -> &mut Self {
+    pub fn authority(&mut self, story: &impl ToBlock) -> &mut Self {
         self.events.push(Event::Snapshot {
             label: "Authority flow".to_string(),
-            block: story.to_markdown(),
+            block: story.to_block(),
         });
         self
     }
@@ -208,11 +211,12 @@ impl Report {
     /// stays a single well-formed disclosure.
     ///
     /// ```no_run
-    /// # use testsvm::report::{Report, MarkdownBlock};
+    /// # use testsvm::report::Report;
+    /// # use frood_guide::Block;
     /// # let mut md = Report::new("t", "i");
     /// md.act("Act 1: open the session", |a| {
     ///     a.note("Alice opens the vault, Bob funds it.");
-    ///     a.block("diagram", MarkdownBlock::raw("```mermaid\nsequenceDiagram\n...\n```"));
+    ///     a.block("diagram", Block::Verbatim("```mermaid\nsequenceDiagram\n...\n```".into()));
     /// });
     /// ```
     pub fn act(
@@ -352,16 +356,16 @@ impl ActBuilder {
     }
 
     /// Capture a render-ready view of some state inside the act.
-    pub fn snapshot(&mut self, label: impl Into<String>, value: &impl super::block::ToMarkdown) -> &mut Self {
+    pub fn snapshot(&mut self, label: impl Into<String>, value: &impl ToBlock) -> &mut Self {
         self.events.push(Event::Snapshot {
             label: label.into(),
-            block: value.to_markdown(),
+            block: value.to_block(),
         });
         self
     }
 
-    /// Attach a pre-built block inside the act.
-    pub fn block(&mut self, label: impl Into<String>, block: MarkdownBlock) -> &mut Self {
+    /// Attach a frood-guide [`Block`] inside the act.
+    pub fn block(&mut self, label: impl Into<String>, block: Block) -> &mut Self {
         self.events.push(Event::Snapshot {
             label: label.into(),
             block,
