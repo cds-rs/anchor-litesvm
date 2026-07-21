@@ -13,6 +13,6 @@ publish = false
 [workspace]
 
 [dependencies]
-frood = { git = "https://github.com/pan-galactic/sol-babelfish", rev = "9e37d627cd5b4d032f5caa2f10cd240e172c9eab" }
-frood-idl = { git = "https://github.com/pan-galactic/sol-babelfish", rev = "9e37d627cd5b4d032f5caa2f10cd240e172c9eab" }
+frood = { git = "https://github.com/pan-galactic/sol-babelfish", rev = "9f35f2aa3fd4c3235877d501fee3831c26bf850c" }
+frood-idl = { git = "https://github.com/pan-galactic/sol-babelfish", rev = "9f35f2aa3fd4c3235877d501fee3831c26bf850c" }
 solana-pubkey = { version = "3.0", features = ["curve25519"] }
