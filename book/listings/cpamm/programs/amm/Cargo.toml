@@ -31,7 +31,7 @@ amm-math = { path = "../../crates/amm-math" }
 # `#[cfg(not(target_os = "solana"))]` in src/), never compiled into the BPF
 # binary. Matches the other book listings.
 [target.'cfg(not(target_os = "solana"))'.dependencies]
-anchor-litesvm = { git = "https://github.com/cds-rs/anchor-litesvm", branch = "turbin3" }
+anchor-litesvm = { git = "https://github.com/cds-rs/anchor-litesvm", branch = "main" }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }

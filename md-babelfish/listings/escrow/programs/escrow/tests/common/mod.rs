@@ -150,21 +150,16 @@ impl TokenBalances {
 
 impl ToBlock for TokenBalances {
     fn to_block(&self) -> Block {
-        // A two-column "account / amount" table in the guide vocabulary: plain
+        // A two-column "account / amount" kv table in the guide vocabulary: plain
         // Text cells (the amounts are pre-formatted, no thousands policy), an
         // absent balance shown as an em dash.
-        let rows = self
-            .rows
-            .iter()
-            .map(|(k, v)| {
+        Block::Table(TableModel::kv(
+            ["account", "amount"],
+            self.rows.iter().map(|(k, v)| {
                 let amount = v.map_or_else(|| "—".to_string(), |n| n.to_string());
-                vec![Cell::from(k.as_str()), Cell::from(amount)]
-            })
-            .collect();
-        Block::Table(
-            TableModel::new(vec!["account".to_string(), "amount".to_string()], rows)
-                .expect("a two-column balances table"),
-        )
+                (Cell::from(k.as_str()), Cell::from(amount))
+            }),
+        ))
     }
 }
 

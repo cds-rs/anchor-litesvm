@@ -448,18 +448,15 @@ impl Scenario {
     pub fn observe_config(&self, pool: &Pool) -> Block {
         let config: amm::Config = self.ctx.load(&pool.config);
         let authority = if config.authority.is_some() { "set" } else { "renounced" };
-        Block::Table(
-            TableModel::new(
-                vec!["field".to_string(), "value".to_string()],
-                vec![
-                    vec![Cell::from("seed"), Cell::from(config.seed.to_string())],
-                    vec![Cell::from("fee_bps"), Cell::from(config.fee_bps.to_string())],
-                    vec![Cell::from("locked"), Cell::from(config.locked.to_string())],
-                    vec![Cell::from("authority"), Cell::from(authority)],
-                ],
-            )
-            .expect("a two-column config table"),
-        )
+        Block::Table(TableModel::kv(
+            ["field", "value"],
+            [
+                (Cell::from("seed"), Cell::from(config.seed.to_string())),
+                (Cell::from("fee_bps"), Cell::from(config.fee_bps.to_string())),
+                (Cell::from("locked"), Cell::from(config.locked.to_string())),
+                (Cell::from("authority"), Cell::from(authority)),
+            ],
+        ))
     }
 }
 
@@ -484,17 +481,12 @@ impl Balances {
 
 impl ToBlock for Balances {
     fn to_block(&self) -> Block {
-        let rows = self
-            .rows
-            .iter()
-            .map(|(k, b)| {
+        Block::Table(TableModel::kv(
+            ["account", "balance"],
+            self.rows.iter().map(|(k, b)| {
                 let balance = b.map_or_else(|| "—".to_string(), |v| v.to_string());
-                vec![Cell::from(k.as_str()), Cell::from(balance)]
-            })
-            .collect();
-        Block::Table(
-            TableModel::new(vec!["account".to_string(), "balance".to_string()], rows)
-                .expect("a two-column balances table"),
-        )
+                (Cell::from(k.as_str()), Cell::from(balance))
+            }),
+        ))
     }
 }
